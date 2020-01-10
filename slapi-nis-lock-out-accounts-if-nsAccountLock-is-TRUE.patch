@@ -1,0 +1,64 @@
+From 842f3464b970d59fd4d696cba0476caf5728baa5 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 19 Jan 2016 07:37:46 +0200
+Subject: [PATCH 6/6] nis: lock out accounts if nsAccountLock is TRUE
+
+Add a rule that adds two bang characters in front of the password.
+
+When the password algorithm is defined as CRYPT and NIS is used to
+authenticate users on other systems, there is no way to disable or lock
+accounts. Traditional convention has been to put two bang (exclamation)
+characters in front of the password, creating an impossible password
+hash. This effectively locks the user account, preventing
+authentication.
+
+All UNIX systems agree that for encrypted passwords presence of a
+character which cannot be part of CRYPT password scheme renders
+impossible to login to system with such password. However, not all
+systems have meaning of locked accounts and even how these locked
+accounts express themselves.
+
+There is certain controversy in what could be used to indicate locked
+accounts:
+ - GNU/Linux systems expect '!' as first character of the password field
+ - FreeBSD expects '*LOCKED*' string at start of the password field
+ - Various Solaris versions expect '*LOCK*' string at start of the
+   password field
+ - NetBSD has no meaning of locked passwords via content of password field
+
+Given that it is impossible to serve NIS maps with encrypted passwords
+in a different way to different clients, standardize on '!!' scheme as
+traditional among UNIX administrators.
+
+Bug: https://bugzilla.redhat.com/show_bug.cgi?id=1298478
+
+diff -up slapi-nis-0.40/src/defs-nis.c.nsaccountlock slapi-nis-0.40/src/defs-nis.c
+--- slapi-nis-0.40/src/defs-nis.c.nsaccountlock	2012-03-31 00:52:47.000000000 +0300
++++ slapi-nis-0.40/src/defs-nis.c	2016-01-19 08:05:58.217068345 +0200
+@@ -51,22 +51,22 @@ static struct configuration {
+ 	{"passwd.byname", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixAccount)",
+ 	 "%{uid}", NULL,
+-	 "%{uid}:%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
++	 "%{uid}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
+ 	 ":\r\n"},
+ 	{"passwd.byuid", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixAccount)",
+ 	 "%{uidNumber}", NULL,
+-	 "%{uid}:%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
++	 "%{uid}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
+ 	 ":\r\n"},
+ 	{"group.byname", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixGroup)",
+ 	 "%{cn}", NULL,
+-	 "%{cn}:%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
++	 "%{cn}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
+ 	 ":,\r\n"},
+ 	{"group.bygid", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixGroup)",
+ 	 "%{gidNumber}", NULL,
+-	 "%{cn}:%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%{gidNumber}:%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
++	 "%{cn}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%{gidNumber}:%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
+ 	 ":,\r\n"},
+ 	{"netgroup", config_exact, FALSE, NULL,
+ 	 "(objectClass=nisNetgroup)",
