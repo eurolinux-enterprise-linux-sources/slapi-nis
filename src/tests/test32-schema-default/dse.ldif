@@ -1,0 +1,12 @@
+dn: cn=compat-passwd,cn=Schema Compatibility,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: compat-passwd
+schema-compat-container-group: cn=compat,cn=Accounts,dc=example,dc=com
+schema-compat-container-rdn: cn=Users
+schema-compat-check-access: yes
+schema-compat-search-base: cn=Users,cn=Accounts,dc=example,dc=com
+schema-compat-search-filter: (|(objectClass=extensibleObject)(objectClass=posixAccount))
+schema-compat-entry-rdn: %default("%ifeq(\"uid\",\"tuser3\",\"cn=BINGO\",\"%{nosuchattribute}\")","cn=%{gecos}","uid=%{uid}","cn=(unset)")
+schema-compat-entry-attribute: objectclass=extensibleobject
+

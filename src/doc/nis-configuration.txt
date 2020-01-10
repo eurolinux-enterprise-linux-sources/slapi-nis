@@ -1,0 +1,137 @@
+There are two classes of configuration information which the plugin
+uses: configuration for the plugin as a whole, and configuration for
+individual maps.
+
+Configuration for the plugin as a whole is stored in the same entry
+which instructs the server to load the plugin.  These attributes are
+recognized:
+
+ * nis-max-dgram-size
+   This sets the maximum size of a response that the server will attempt
+   to send to clients which issued a query over UDP.  The default value
+   is 1024 bytes.
+ * nis-max-value-size
+   This sets the maximum size of a value that the server will attempt to
+   send to clients which issued a query over TCP.  This primarily comes
+   into play when the client attempts to enumerate the contents of a map
+   using the yp_all() function.  While the server attempts to respond in
+   chunks of roughly 4 kB at a time, exceptions are made up to a point.
+   The default value is 262144 (256 kB).
+ * nis-tcp-wrappers-name
+   This sets the name the server will use when evaluating hosts.allow
+   and hosts.deny files to determine if the client should be allowed
+   access.  The default is "nis-plugin".
+ * nis-securenet
+   This multi-valued attribute provides information about which networks
+   are allowed to access the service.  If no values are present (this is
+   the default), all clients are allowed access.  Any values which are
+   present are interpreted as a netmask and a network block address.
+   The value "255.0.0.0 127.0.0.0" is one valid example.
+ * nsslapd-pluginarg0
+   This sets the port on which the server should listen for client
+   request.  By default, the server will use an arbitrariliy-chosen
+   privileged port, but this option is provided to allow administrators
+   to run the service on systems which have firewalls configured.
+
+In combination with the settings the directory server itself needs in
+order to be able to load a postoperation plugin, an example entry might
+look like this:
+
+  dn: cn=NIS Server, cn=plugins, cn=config
+  objectclass: top
+  objectclass: nsSlapdPlugin
+  objectclass: extensibleObject
+  cn: NIS Server
+  nsslapd-pluginpath: /usr/lib/dirsrv/plugins/nisserver-plugin.so
+  nsslapd-plugininitfunc: nis_plugin_init
+  nsslapd-plugintype: postoperation
+  nsslapd-pluginenabled: on
+  nsslapd-pluginid: nis-server
+  nsslapd-version: 0.0
+  nsslapd-pluginvendor: redhat.com
+  nsslapd-plugindescription: NIS Server Plugin
+  nsslapd-pluginarg0: 876
+  nis-tcp-wrappers-name: nis-server
+  nis-max-dgram-size: 2048
+  nis-max-value-size: 1048576
+
+Configuration for individual maps should be stored in entries directly
+beneath the plugin's entry.  These attributes are recognized:
+
+ * nis-domain
+   The NIS domain in which this map appears.  The server will claim to
+   support any domain for which it has at least one map configured.
+   There is no default value, and a single map will appear in multiple
+   domains if this attribute has multiple values.
+ * nis-map
+   The name of this map in the domain.  There is no default value, and a
+   single map will appear with multiple names if this attribute has
+   multiple values.
+ * nis-base
+   The entry under which directory server entries which should be
+   converted into NIS map entries can be found.  There is no default
+   setting.  If this attribute has more than one value, the resulting
+   NIS map will include every entry which can be found by searching
+   under all of the specified entries.
+ * nis-secure
+   Indicates that the contents of this map should only be visible to
+   clients whose queries originated from port numbers below 1024.  The
+   default setting for all maps is "no".
+ * nis-filter
+   The filter which is used to select entries for conversion, given as
+   an LDAP search filter.  A default value, which varies based on the
+   name of the map, is used if none is specified.
+ * nis-key-format
+   A format specifier which the plugin will use to convert the contents
+   of the directory server entry into a key for the NIS map.  If the
+   expression fails to evaluate, or evaluates to more than one value,
+   the entry will be ignored.  This can be used to ensure a 1-to-1
+   mapping between entries in the directory server and a NIS map.  The
+   syntax of format specifiers is described in "format-specifiers.txt".
+ * nis-keys-format
+   A format specifier which the plugin will use to convert the contents
+   of the directory server entry into a set of keys for the NIS map.
+   The resulting NIS map will include a key for each value to which the
+   expression evaluates.  This can be used to allow for an arbitrary
+   number of NIS map entries to be created for a given directory server
+   entry.  The syntax of format specifiers is described in
+   "format-specifiers.txt".
+ * nis-value-format
+   A format specifier which the plugin will use to convert the contents
+   of the directory server entry into a NIS map entry's value.  If the
+   entry will have multiple keys, each key will use the same value.  The
+   syntax of format specifiers is described in "format-specifiers.txt".
+ * nis-values-format
+   A format specifier which the plugin will use to convert the contents
+   of the directory server entry into values for NIS map entries.
+   Typically this will be used in combination with a "nis-keys-format"
+   setting to generate a set of key/value pairs for a single directory
+   server entry.  If there are fewer values than keys, the values will
+   be reused.  The syntax of format specifiers is described in
+   "format-specifiers.txt".
+ * nis-disallowed-chars
+   A list of characters which, if found in an attribute value, will
+   cause that attribute value to be ignored when evaluating keys and
+   values.
+
+The nis-filter, nis-key-format, nis-keys-format, nis-value-format, and
+nis-values-format settings all have defaults which vary based on the
+name of the NIS map, but the defaults can always be overridden.  An
+example map definition might look like this:
+
+  dn: nis-domain=example.com+nis-map=email.byname,cn=NIS Server,cn=plugins,cn=config
+  objectclass: top
+  objectclass: extensibleObject
+  nis-domain: example.com
+  nis-map: email.byname
+  nis-base: cn=Users, cn=Accounts, dc=example, dc=com
+  nis-filter: (&(mail=*)(uid=*))
+  nis-key-format: %{uid}
+  nis-value-format: %{uid}:%{mail}
+  nis-disallowed-chars: :
+  nis-secure: no
+
+In this example, a filter, key-format, and value-format needed to be
+specified because the module has no built-in defaults for a map named
+"email.byname".  Default filter and format settings are built into the
+module for the maps listed in "nis-known-maps.txt".

@@ -1,0 +1,98 @@
+dn: dc=example, dc=com
+objectClass: top
+objectClass: domain
+dc: example
+aci: (targetattr!="userPassword")(version 3.0; acl "Enable anonymous access"; allow (read, search, compare) userdn="ldap:///anyone";)
+aci: (targetattr="carLicense || description || displayName || facsimileTelephoneNumber || homePhone || homePostalAddress || initials || jpegPhoto || labeledURL || mail || mobile || pager || photo || postOfficeBox || postalAddress || postalCode || preferredDeliveryMethod || preferredLanguage || registeredAddress || roomNumber || secretary || seeAlso || st || street || telephoneNumber || telexNumber || title || userCertificate || userPassword || userSMIMECertificate || x500UniqueIdentifier")(version 3.0; acl "Enable self write for common attributes"; allow (write) userdn="ldap:///self";)
+aci: (targetattr ="*")(version 3.0;acl "Directory Administrators Group";allow (all) (groupdn = "ldap:///cn=Directory Administrators, dc=boston, dc=redhat, dc=com");)
+
+dn: cn=Accounts, dc=example, dc=com
+objectClass: nsContainer
+cn: Accounts
+
+dn: cn=Users1, cn=Accounts, dc=example, dc=com
+objectClass: nsContainer
+cn: Users1
+
+dn: uid=user1a, cn=Users1, cn=Accounts, dc=example, dc=com
+objectClass: posixAccount
+objectClass: inetUser
+uid: user1a
+uidNumber: 1001
+gidNumber: 1001
+cn: User 1 A
+gecos: User 1 A
+loginShell: /bin/sh
+homeDirectory: /home/user1a
+
+dn: uid=user1b, cn=Users1, cn=Accounts, dc=example, dc=com
+objectClass: posixAccount
+objectClass: inetUser
+uid: user1b
+uidNumber: 1002
+gidNumber: 1002
+cn: User 1 B
+gecos: User 1 B
+loginShell: /bin/sh
+homeDirectory: /home/user1b
+
+dn: uid=user1c, cn=Users1, cn=Accounts, dc=example, dc=com
+objectClass: posixAccount
+objectClass: inetUser
+uid: user1c
+uidNumber: 1003
+gidNumber: 1003
+cn: User 1 C
+gecos: User 1 C
+loginShell: /bin/sh
+homeDirectory: /home/user1c
+
+dn: cn=Groups1, cn=Accounts, dc=example, dc=com
+objectClass: nsContainer
+cn: Groups1
+
+dn: cn=Users2, cn=Accounts, dc=example, dc=com
+objectClass: nsContainer
+cn: Users2
+
+dn: uid=user2a, cn=Users2, cn=Accounts, dc=example, dc=com
+objectClass: posixAccount
+objectClass: inetUser
+uid: user2a
+uidNumber: 2001
+gidNumber: 2001
+cn: User 2 A
+gecos: User 2 A
+loginShell: /bin/sh
+homeDirectory: /home/user2a
+
+dn: uid=user2b, cn=Users2, cn=Accounts, dc=example, dc=com
+objectClass: posixAccount
+objectClass: inetUser
+uid: user2b
+uidNumber: 2002
+gidNumber: 2002
+cn: User 2 B
+gecos: User 2 B
+loginShell: /bin/sh
+homeDirectory: /home/user2b
+
+dn: uid=user2c, cn=Users2, cn=Accounts, dc=example, dc=com
+objectClass: posixAccount
+objectClass: inetUser
+uid: user2c
+uidNumber: 2003
+gidNumber: 2003
+cn: User 2 C
+gecos: User 2 C
+loginShell: /bin/sh
+homeDirectory: /home/user2c
+
+dn: cn=Groups2, cn=Accounts, dc=example, dc=com
+objectClass: nsContainer
+cn: Groups2
+
+dn: cn=ipServices, dc=example, dc=com
+objectClass: nsContainer
+cn: ipServices
+

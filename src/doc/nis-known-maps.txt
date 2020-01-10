@@ -1,0 +1,27 @@
+This is the list of NIS maps for which compiled-in default search
+filters and key and value format specifiers are currently known:
+
+    passwd.byname
+    passwd.byuid
+    group.byname
+    group.bygid
+    netgroup
+    auto.*
+    ethers.byaddr
+    ethers.byname
+    hosts.byaddr
+    hosts.byname
+    mail.aliases
+    mail.byaddr
+    netgroup.byhost
+    netgroup.byuser
+    netid.byname
+    networks.byaddr
+    networks.byname
+    protocols.byname
+    protocols.bynumber
+    rpc.byname
+    rpc.bynumber
+    services.byname
+    services.byservicename
+    ypservers

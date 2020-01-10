@@ -1,0 +1,26 @@
+master 1 example.com passwd.byname
+1
+master 2 example.com passwd.byname
+1
+master 1 example.com bogus-map
+1
+master 2 example.com bogus-map
+1
+master 1 example2.com passwd.byname
+1
+master 2 example2.com passwd.byname
+1
+order 1 example.com passwd.byname
+1
+NOT OK: age -ge 60
+order 2 example.com passwd.byname
+1
+NOT OK: age -ge 60
+order 1 example.com bogus-map
+1
+order 2 example.com bogus-map
+1
+order 1 example2.com bogus-map
+1
+order 2 example2.com bogus-map
+1

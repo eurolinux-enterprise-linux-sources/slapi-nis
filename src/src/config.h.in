@@ -1,0 +1,293 @@
+/* src/config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* Define to the default maximum datagram reply size. */
+#undef DEFAULT_MAX_DGRAM_SIZE
+
+/* Define to the default maximum map entry key and value size. */
+#undef DEFAULT_MAX_VALUE_SIZE
+
+/* Define to the default target size for a connected reply fragment. */
+#undef DEFAULT_TARGET_REPLY_SIZE
+
+/* Define to the default application name to use when evaluating hosts.allow
+   and hosts.deny. */
+#undef DEFAULT_TCPWRAP_NAME
+
+/* Define to 1 if you have the `clnttcp6_create' function. */
+#undef HAVE_CLNTTCP6_CREATE
+
+/* Define to 1 if you have the declaration of `slapi_new_rwlock', and to 0 if
+   you don't. */
+#undef HAVE_DECL_SLAPI_NEW_RWLOCK
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_BE_TXN_POST_ADD_FN', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_ADD_FN
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_BE_TXN_POST_DELETE_FN ', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_DELETE_FN____________________
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_BE_TXN_POST_MODIFY_FN', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODIFY_FN
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_BE_TXN_POST_MODRDN_FN', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODRDN_FN
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_INTERNAL_POST_ADD_FN', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_INTERNAL_POST_ADD_FN
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_INTERNAL_POST_DELETE_FN', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_INTERNAL_POST_DELETE_FN
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_INTERNAL_POST_MODIFY_FN', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_INTERNAL_POST_MODIFY_FN
+
+/* Define to 1 if you have the declaration of
+   `SLAPI_PLUGIN_INTERNAL_POST_MODRDN_FN', and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_INTERNAL_POST_MODRDN_FN
+
+/* Define to 1 if you have the declaration of `SLAPI_PLUGIN_POST_ADD_FN', and
+   to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_POST_ADD_FN
+
+/* Define to 1 if you have the declaration of `SLAPI_PLUGIN_POST_DELETE_FN',
+   and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_POST_DELETE_FN
+
+/* Define to 1 if you have the declaration of `SLAPI_PLUGIN_POST_MODIFY_FN',
+   and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_POST_MODIFY_FN
+
+/* Define to 1 if you have the declaration of `SLAPI_PLUGIN_POST_MODRDN_FN',
+   and to 0 if you don't. */
+#undef HAVE_DECL_SLAPI_PLUGIN_POST_MODRDN_FN
+
+/* Define if you have <dirsrv/slapi-plugin.h> */
+#undef HAVE_DIRSRV_SLAPI_PLUGIN_H
+
+/* Define to 1 if you have the <dlfcn.h> header file. */
+#undef HAVE_DLFCN_H
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define if you have libasyncns. */
+#undef HAVE_LIBASYNCNS
+
+/* Define to 1 if you have the `pthread' library (-lpthread). */
+#undef HAVE_LIBPTHREAD
+
+/* Define to 1 if you have the `wrap' library (-lwrap). */
+#undef HAVE_LIBWRAP
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the <rpc/xdr.h> header file. */
+#undef HAVE_RPC_XDR_H
+
+/* Define to 1 if you have the <slapi-plugin.h> header file. */
+#undef HAVE_SLAPI_PLUGIN_H
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if you have the <tcpd.h> header file. */
+#undef HAVE_TCPD_H
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
+#undef LT_OBJDIR
+
+/* Define to name of the attribute which lists the containers for entries for
+   a given map. */
+#undef NIS_MAP_CONFIGURATION_BASE_ATTR
+
+/* Define to the list of characters which should not be allowed in attribute
+   values which are being considered. */
+#undef NIS_MAP_CONFIGURATION_DISALLOWED_CHARS_ATTR
+
+/* Define to name of the map configuration attribute which holds the name of
+   the domain of the map. */
+#undef NIS_MAP_CONFIGURATION_DOMAIN_ATTR
+
+/* Define to name of the attribute which holds the filter for selecting
+   entries for a given map. */
+#undef NIS_MAP_CONFIGURATION_FILTER_ATTR
+
+/* Define to name of the map configuration attribute which holds the format
+   specifier for possibly-multiple keys for a map entry. */
+#undef NIS_MAP_CONFIGURATION_KEYS_ATTR
+
+/* Define to name of the map configuration attribute which holds the format
+   specifier for single keys for a map entry. */
+#undef NIS_MAP_CONFIGURATION_KEY_ATTR
+
+/* Define to name of the map configuration attribute which holds the name of
+   the map. */
+#undef NIS_MAP_CONFIGURATION_MAP_ATTR
+
+/* Define to name of the map configuration attribute which determines whether
+   or not the map is treated a 'secure' map. */
+#undef NIS_MAP_CONFIGURATION_SECURE_ATTR
+
+/* Define to name of the map configuration attribute which holds the format
+   specifier for the possibly-multiple values for a map entry. */
+#undef NIS_MAP_CONFIGURATION_VALUES_ATTR
+
+/* Define to name of the map configuration attribute which holds the format
+   specifier for the value for a map entry. */
+#undef NIS_MAP_CONFIGURATION_VALUE_ATTR
+
+/* Define to the name of the plugin configuration attribute which holds the
+   maximum size for a NIS datagram response. */
+#undef NIS_PLUGIN_CONFIGURATION_MAXDGRAM_ATTR
+
+/* Define to the name of the plugin configuration attribute which holds the
+   maximum size for a NIS entry value. */
+#undef NIS_PLUGIN_CONFIGURATION_MAXVALUE_ATTR
+
+/* Define to the name of the plugin configuration attribute which holds the
+   port which the server should use by default. If none is specified, the
+   server will attempt to use any available port. */
+#undef NIS_PLUGIN_CONFIGURATION_PORT_ATTR
+
+/* Define to the name of the plugin configuration attribute which holds a
+   securenets entry. */
+#undef NIS_PLUGIN_CONFIGURATION_SECURENET_ATTR
+
+/* Define to the name of the entry attribute which holds the name of a yp
+   server which should replicate the contents of this server. */
+#undef NIS_PLUGIN_CONFIGURATION_SERVER_ATTR
+
+/* Define to the name of the plugin configuration attribute which holds
+   service name that will be used when evaluating hosts.allow and hosts.deny.
+   */
+#undef NIS_PLUGIN_CONFIGURATION_TCPWRAPNAME_ATTR
+
+/* Define to the environment variable which will override the
+   fail-if-unable-to-use-the-portmapper logic. */
+#undef NIS_PLUGIN_CONTINUE_WITHOUT_PORTMAP_ENV
+
+/* Define to the environment variable which will override the default
+   skip-uninteresting-updates logic for the NIS plugin. */
+#undef NIS_PLUGIN_PROCESS_UNINTERESTING_UPDATES_ENV
+
+/* Name of package */
+#undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Define to the environment variable which will override the default
+   skip-uninteresting-updates logic for the schema compat plugin. */
+#undef SCHEMA_COMPAT_PLUGIN_PROCESS_UNINTERESTING_UPDATES_ENV
+
+/* Define to name of the attribute which dictates whether or not access
+   control is checked for this container and its contents. */
+#undef SCH_CONTAINER_CONFIGURATION_ACCESS_ATTR
+
+/* Define to name of the attribute which is used to specify attributes to be
+   used when constructing entries. */
+#undef SCH_CONTAINER_CONFIGURATION_ATTR_ATTR
+
+/* Define to name of the attribute which lists the containers to search when
+   locating entries to be used for constructing entries for a given container.
+   */
+#undef SCH_CONTAINER_CONFIGURATION_BASE_ATTR
+
+/* Define to name of the attribute which holds the compatibility container's
+   RDN. */
+#undef SCH_CONTAINER_CONFIGURATION_CONTAINER_ATTR
+
+/* Define to name of the attribute which holds the filter for selecting
+   entries to be used for constructing entries for a given container. */
+#undef SCH_CONTAINER_CONFIGURATION_FILTER_ATTR
+
+/* Define to name of the attribute which holds the name of the top-level
+   container used for this set of compatibility containers. */
+#undef SCH_CONTAINER_CONFIGURATION_GROUP_ATTR
+
+/* Define to name of the attribute which is used to specify the RDN of a
+   constructed entry. */
+#undef SCH_CONTAINER_CONFIGURATION_RDN_ATTR
+
+/* Define to 1 if you have the ANSI C header files. */
+#undef STDC_HEADERS
+
+/* Define to use NSPR read/write locks. */
+#undef USE_NSPR_LOCKS
+
+/* Define to use NSPR threading functions. */
+#undef USE_NSPR_THREADS
+
+/* Define to use POSIX threading functions. */
+#undef USE_PTHREADS
+
+/* Define to use POSIX read/write locks. */
+#undef USE_PTHREAD_LOCKS
+
+
+#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_ADD_FN
+#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODIFY_FN
+#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODRDN_FN
+#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_DELETE_FN
+#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_ADD_FN
+#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODIFY_FN
+#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODRDN_FN
+#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_DELETE_FN
+/* Define to update our data after commits rather than after all modifications. */
+#define USE_SLAPI_BE_TXNS 1
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+
+/* Define to use SLAPI read/write locks. */
+#undef USE_SLAPI_LOCKS
+
+/* Version number of package */
+#undef VERSION

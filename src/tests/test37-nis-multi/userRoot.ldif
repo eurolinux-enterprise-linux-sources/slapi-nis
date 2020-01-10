@@ -1,0 +1,18 @@
+dn: cn=computers, cn=Accounts, dc=example, dc=com
+objectClass: nsContainer
+cn: computers
+
+dn: cn=testbox1, cn=computers, cn=Accounts, dc=example, dc=com
+objectClass: ieee802device
+objectClass: device
+cn: testbox1
+cn: testbox2
+cn: testbox3
+macAddress: 01:02:03:04:05:06
+macAddress: 01:02:03:04:05:07
+macAddress: 01:02:03:04:05:08
+macAddress: 01:02:03:04:05:09
+macAddress: 01:02:03:04:05:0a
+macAddress: 01:02:03:04:05:0b
+macAddress: 01:02:03:04:05:0c
+

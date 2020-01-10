@@ -1,0 +1,4 @@
+modifying entry "uid=user2a, cn=Users2, cn=Accounts, dc=example, dc=com"
+
+modifying entry "uid=user2b, cn=Users2, cn=Accounts, dc=example, dc=com"
+

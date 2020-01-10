@@ -1,0 +1,40 @@
+dn: ou=deepgroups, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+ou: deepgroups
+schema-compat-container-group: cn=compat, dc=example, dc=com
+schema-compat-container-rdn: ou=deepgroups
+schema-compat-search-base: cn=Groups, cn=Accounts, dc=example, dc=com
+schema-compat-search-filter: objectclass=posixGroup
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=posixGroup
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: memberUid=%deref_r("member","uid")
+
+dn: ou=usermembers, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+ou: usermembers
+schema-compat-container-group: cn=compat, dc=example, dc=com
+schema-compat-container-rdn: ou=usermembers
+schema-compat-search-base: cn=Groups, cn=Accounts, dc=example, dc=com
+schema-compat-search-filter: objectclass=posixGroup
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=posixGroup
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: memberUid=%deref_rf("member","objectclass=posixaccount","uid")
+
+dn: ou=groupmembers, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+ou: groupmembers
+schema-compat-container-group: cn=compat, dc=example, dc=com
+schema-compat-container-rdn: ou=groupmembers
+schema-compat-search-base: cn=Groups, cn=Accounts, dc=example, dc=com
+schema-compat-search-filter: objectclass=posixGroup
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=posixGroup
+schema-compat-entry-attribute: objectclass=groupOfNames
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: memberUid=@%deref_rf("member","objectclass=posixgroup","cn")
+

@@ -1,0 +1,199 @@
+dn: cn=ng,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: nsContainer
+cn: ng
+
+dn: cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: nsContainer
+cn: computers
+
+dn: fqdn=myhost.lab.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: myhost.lab.com
+
+dn: fqdn=otherhost.lab.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: otherhost.lab.com
+
+dn: fqdn=thirdhost.lab.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: thirdhost.lab.com
+
+dn: fqdn=nvguest1.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: nvguest1.vg.com
+
+dn: fqdn=nvguest2.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: nvguest2.vg.com
+
+dn: fqdn=nvguest3.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: nvguest3.vg.com
+
+dn: fqdn=guest1.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: guest1.vg.com
+
+dn: fqdn=guest2.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: guest2.vg.com
+
+dn: fqdn=guest3.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+fqdn: guest3.vg.com
+
+dn: cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: nsContainer
+cn: users
+
+dn: cn=dev1,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+uid: dev1
+
+dn: cn=dev2,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+uid: dev2
+
+dn: cn=dev3,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+uid: dev3
+
+dn: cn=support1,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+uid: support1
+
+dn: cn=support2,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+uid: support2
+
+dn: cn=support3,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+uid: support3
+
+dn: uid=gorelock,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: Gorelock
+uid: gorelock
+
+dn: cn=torgo,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: Torgo
+uid: torgo
+
+dn: cn=sc,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: sc
+uid: steve_sc
+
+dn: cn=sss,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: sss
+uid: steve_sss
+
+dn: cn=Robert Crow,cn=users,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: Robert Crow
+uid: rcrow
+
+dn: cn=groups,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: nsContainer
+cn: groups
+
+dn: cn=Engineering,cn=groups,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: Engineering
+member: cn=dev1,cn=users,cn=accounts,dc=example,dc=com
+member: cn=dev2,cn=users,cn=accounts,dc=example,dc=com
+member: cn=dev3,cn=users,cn=accounts,dc=example,dc=com
+
+dn: cn=Support,cn=groups,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: Support
+member: cn=support1,cn=users,cn=accounts,dc=example,dc=com
+member: cn=support2,cn=users,cn=accounts,dc=example,dc=com
+member: cn=support3,cn=users,cn=accounts,dc=example,dc=com
+
+dn: cn=hostgroups,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: nsContainer
+cn: hostgroups
+
+dn: cn=NestedVirtualGuests,cn=hostgroups,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+member: fqdn=nvguest1.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+member: fqdn=nvguest2.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+member: fqdn=nvguest3.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+cn: NestedVirtualGuests
+
+dn: cn=VirtGuests,cn=hostgroups,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+member: fqdn=guest1.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+member: fqdn=guest2.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+member: fqdn=guest3.vg.com,cn=computers,cn=accounts,dc=example,dc=com
+member: cn=NestedVirtualGuests,cn=hostgroups,cn=accounts,dc=example,dc=com
+cn: VirtGuests
+
+dn: cn=ng1,cn=ng,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: ng1
+allHostsFlag: false
+allUsersFlag: false
+memberHosts: fqdn=myhost.lab.com,cn=computers,cn=accounts,dc=example,dc=com
+memberHosts: cn=VirtGuests,cn=hostgroups,cn=accounts,dc=example,dc=com
+memberUsers: cn=sss,cn=users,cn=accounts,dc=example,dc=com
+memberUsers: uid=gorelock,cn=users,cn=accounts,dc=example,dc=com
+memberUsers: cn=Engineering,cn=groups,cn=accounts,dc=example,dc=com
+nisDomainName: oldnis.domain.com
+member: cn=ng2,cn=ng,cn=accounts,dc=example,dc=com
+
+dn: cn=ng2,cn=ng,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: ng2
+allHostsFlag: false
+allUsersFlag: false
+externalHost: foo.lab.domain.com
+memberUsers: cn=Robert Crow,cn=users,cn=accounts,dc=example,dc=com
+memberUsers: cn=Support,cn=groups,cn=accounts,dc=example,dc=com
+nisDomainName: lab.domain.com
+
+dn: cn=ng3,cn=ng,cn=accounts,dc=example,dc=com
+objectclass: top
+objectclass: extensibleObject
+cn: ng3
+allHostsFlag: true
+allUsersFlag: false
+memberUsers: cn=Robert Crow,cn=users,cn=accounts,dc=example,dc=com
+memberUsers: cn=Support,cn=groups,cn=accounts,dc=example,dc=com
+nisDomainName: lab.domain.com
+memberOf: cn=ng1,cn=ng,cn=accounts,dc=example,dc=com
+

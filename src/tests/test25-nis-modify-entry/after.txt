@@ -1,0 +1,6 @@
+map list:
+test
+test
+contents of example.com:test:
+group1	group2,user,user3a
+group2	user,user3a

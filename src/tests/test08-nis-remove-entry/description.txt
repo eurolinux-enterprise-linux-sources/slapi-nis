@@ -1,0 +1,1 @@
+detect removal of entry which appeared in map

@@ -1,0 +1,67 @@
+dn: cn=NIS Server, cn=plugins, cn=config
+objectclass: top
+objectclass: nsSlapdPlugin
+objectclass: extensibleObject
+cn: NIS Server
+nsslapd-pluginpath: @myplugindir@/nisserver-plugin.so
+nsslapd-plugininitfunc: nis_plugin_init
+nsslapd-plugintype: postoperation
+nsslapd-pluginenabled: on
+nsslapd-pluginid: nis-server
+nsslapd-pluginversion: @PACKAGE_VERSION@
+nsslapd-pluginvendor: redhat.com
+nsslapd-plugindescription: NIS Server Plugin
+nis-tcp-wrappers-name: nis-server
+
+dn: @domainattr@=@mydomain@+@mapattr@=passwd.byname, cn=NIS Server, cn=plugins, cn=config
+objectclass: top
+objectclass: extensibleObject
+@domainattr@: @mydomain@
+@mapattr@: passwd.byname
+@nisbaseattr@: @people@, @mysuffix@
+nis-secure: no
+
+dn: @domainattr@=@mydomain@+@mapattr@=passwd.byuid, cn=NIS Server, cn=plugins, cn=config
+objectclass: top
+objectclass: extensibleObject
+@domainattr@: @mydomain@
+@mapattr@: passwd.byuid
+@nisbaseattr@: @people@, @mysuffix@
+nis-secure: no
+
+dn: @domainattr@=@mydomain@+@mapattr@=group.byname, cn=NIS Server, cn=plugins, cn=config
+objectclass: top
+objectclass: extensibleObject
+@domainattr@: @mydomain@
+@mapattr@: group.byname
+@nisbaseattr@: @groups@, @mysuffix@
+nis-secure: no
+
+dn: @domainattr@=@mydomain@+@mapattr@=group.bygid, cn=NIS Server, cn=plugins, cn=config
+objectclass: top
+objectclass: extensibleObject
+@domainattr@: @mydomain@
+@mapattr@: group.bygid
+@nisbaseattr@: @groups@, @mysuffix@
+nis-secure: no
+
+dn: @domainattr@=@mydomain@+@mapattr@=group.upg, cn=NIS Server, cn=plugins, cn=config
+objectclass: top
+objectclass: extensibleObject
+@domainattr@: @mydomain@
+@mapattr@: group.upg
+@nisbaseattr@: @people@, @mysuffix@
+nis-filter: (objectclass=posixAccount)
+nis-key-format: %{uid}
+nis-value-format: %{uid}:*:%{gidNumber}:%{uid}
+nis-secure: no
+nis-disallowed-chars: :,
+
+dn: @domainattr@=@mydomain@+@mapattr@=netid.byname, cn=NIS Server, cn=plugins, cn=config
+objectclass: top
+objectclass: extensibleObject
+@domainattr@: @mydomain@
+@mapattr@: netid.byname
+@nisbaseattr@: @people@, @mysuffix@
+nis-secure: no
+

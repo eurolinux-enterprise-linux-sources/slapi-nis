@@ -1,0 +1,1 @@
+detect name addition to entry which appears in map

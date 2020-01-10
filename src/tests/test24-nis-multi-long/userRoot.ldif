@@ -1,0 +1,17 @@
+dn: cn=Stuff, dc=example, dc=com
+objectClass: nsContainer
+cn: Stuff
+
+dn: cn=stuff1, cn=Stuff, dc=example, dc=com
+objectClass: extensibleObject
+cn: stuff1
+testattra: A
+testattra: B
+testattra: C
+testattrb: a
+testattrb: b
+testattrb: c
+testattrc: 1
+testattrc: 2
+testattrc: 3
+

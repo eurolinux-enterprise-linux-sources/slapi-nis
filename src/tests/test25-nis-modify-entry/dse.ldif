@@ -1,0 +1,10 @@
+dn: nis-domain=example.com+nis-map=test,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: test
+nis-base: cn=Groups1, cn=Accounts, dc=example, dc=com
+nis-filter: objectclass=posixgroup
+nis-keys-format: %{cn}
+nis-value-format: %merge(",","%deref_r(\"member\",\"uid\")")
+

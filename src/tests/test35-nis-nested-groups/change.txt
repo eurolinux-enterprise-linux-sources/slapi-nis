@@ -1,0 +1,4 @@
+modifying entry "cn=group1, cn=Groups1, cn=Accounts, dc=example, dc=com"
+
+modifying entry "cn=group2, cn=Groups1, cn=Accounts, dc=example, dc=com"
+

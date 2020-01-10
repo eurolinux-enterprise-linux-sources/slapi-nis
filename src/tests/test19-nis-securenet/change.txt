@@ -1,0 +1,2 @@
+modifying entry "cn=NIS Server,cn=plugins,cn=config"
+

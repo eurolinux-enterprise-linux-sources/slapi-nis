@@ -1,0 +1,2 @@
+modifying entry "cn=g2,cn=groups,cn=accounts,dc=example,dc=com"
+

@@ -1,0 +1,14 @@
+dn: nis-domain=example.com+nis-map=services.byname,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: services.byname
+nis-base: cn=ipServices, dc=example, dc=com
+
+dn: nis-domain=example.com+nis-map=services.byservicename,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: services.byservicename
+nis-base: cn=ipServices, dc=example, dc=com
+

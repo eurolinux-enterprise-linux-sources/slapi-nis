@@ -1,0 +1,16 @@
+dn: ou=people, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+ou: people
+schema-compat-container-group: cn=compatpeople, dc=example, dc=com
+schema-compat-search-base: cn=Users, cn=Accounts, dc=example, dc=com
+schema-compat-search-filter: objectclass=posixAccount
+schema-compat-entry-rdn: uid=%{uid}
+schema-compat-entry-attribute: objectclass=posixAccount
+schema-compat-entry-attribute: gecos=%{cn}
+schema-compat-entry-attribute: cn=%{cn}
+schema-compat-entry-attribute: uidNumber=%{uidNumber}
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: loginShell=%{loginShell}
+schema-compat-entry-attribute: homeDirectory=%{homeDirectory}
+

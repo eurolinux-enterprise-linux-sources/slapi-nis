@@ -1,0 +1,3 @@
+dn: cn=Schema Compatibility,cn=plugins,cn=config
+nsslapd-pluginenabled: off
+

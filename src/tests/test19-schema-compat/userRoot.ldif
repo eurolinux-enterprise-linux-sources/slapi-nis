@@ -1,0 +1,488 @@
+# users, accounts, example.com
+dn: cn=users,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: users
+
+# groups, accounts, example.com
+dn: cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: groups
+
+# services, accounts, example.com
+dn: cn=services,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: services
+
+# account inactivation, accounts, example.com
+dn: cn=account inactivation,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: account inactivation
+
+# computers, accounts, example.com
+dn: cn=computers,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: computers
+
+# etc, example.com
+dn: cn=etc,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: etc
+
+# sysaccounts, etc, example.com
+dn: cn=sysaccounts,cn=etc,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: sysaccounts
+
+# ipa, etc, example.com
+dn: cn=ipa,cn=etc,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: ipa
+
+# masters, ipa, etc, example.com
+dn: cn=masters,cn=ipa,cn=etc,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: masters
+
+# admin, users, accounts, example.com
+dn: uid=admin,cn=users,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+objectClass: KrbPrincipalAux
+objectClass: inetUser
+uid: admin
+krbPrincipalName: admin@EXAMPLE.COM
+cn: Administrator
+sn: Administrator
+uidNumber: 999
+gidNumber: 1001
+homeDirectory: /home/admin
+loginShell: /bin/bash
+gecos: Administrator
+memberOf: cn=admins,cn=groups,cn=accounts,dc=example,dc=com
+krbLastPwdChange: 20090429214740Z
+krbPasswordExpiration: 20090728214740Z
+
+# admins, groups, accounts, example.com
+dn: cn=admins,cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+objectClass: posixGroup
+cn: admins
+description: Account administrators group
+gidNumber: 1001
+member: uid=admin,cn=users,cn=accounts,dc=example,dc=com
+
+# ipausers, groups, accounts, example.com
+dn: cn=ipausers,cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+objectClass: nestedGroup
+objectClass: ipaUserGroup
+objectClass: posixGroup
+gidNumber: 1002
+description: Default group for all users
+cn: ipausers
+member: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
+member: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
+
+# editors, groups, accounts, example.com
+dn: cn=editors,cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+objectClass: posixGroup
+gidNumber: 1003
+description: Limited admins who can edit other users
+cn: editors
+
+# ipaConfig, etc, example.com
+dn: cn=ipaConfig,cn=etc,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+objectClass: ipaGuiConfig
+ipaUserSearchFields: uid,givenName,sn,telephoneNumber,ou,title
+ipaGroupSearchFields: cn,description
+ipaSearchTimeLimit: 2
+ipaSearchRecordsLimit: 0
+ipaHomesRootDir: /home
+ipaDefaultLoginShell: /bin/sh
+ipaDefaultPrimaryGroup: ipausers
+ipaMaxUsernameLength: 8
+ipaPwdExpAdvNotify: 4
+ipaGroupObjectClasses: top
+ipaGroupObjectClasses: groupofnames
+ipaGroupObjectClasses: nestedGroup
+ipaGroupObjectClasses: ipaUserGroup
+ipaUserObjectClasses: top
+ipaUserObjectClasses: person
+ipaUserObjectClasses: organizationalPerson
+ipaUserObjectClasses: inetOrgPerson
+ipaUserObjectClasses: inetUser
+ipaUserObjectClasses: posixAccount
+ipaUserObjectClasses: krbPrincipalAux
+ipaDefaultEmailDomain: example.com
+cn: ipaConfig
+
+# cosTemplates, accounts, example.com
+dn: cn=cosTemplates,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: cosTemplates
+
+# cn\3Dinactivated\2Ccn\3Daccount inactivation\2Ccn\3Daccounts\2Cdc\3Dexample
+ \2Cdc\3Dcom, cosTemplates, accounts, example.com
+dn: cn="cn=inactivated,cn=account inactivation,cn=accounts,dc=example,dc=com",
+ cn=cosTemplates,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: cosTemplate
+objectClass: extensibleobject
+cosPriority: 1
+cn: "cn=inactivated,cn=account inactivation,cn=accounts,dc=example,dc=com"
+
+# inactivated, account inactivation, accounts, example.com
+dn: cn=inactivated,cn=account inactivation,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+cn: inactivated
+
+# cn\3Dactivated\2Ccn\3Daccount inactivation\2Ccn\3Daccounts\2Cdc\3Dexample\2
+ Cdc\3Dcom, cosTemplates, accounts, example.com
+dn: cn="cn=activated,cn=account inactivation,cn=accounts,dc=example,dc=com",cn
+ =cosTemplates,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: cosTemplate
+objectClass: extensibleobject
+cosPriority: 0
+cn: "cn=activated,cn=account inactivation,cn=accounts,dc=example,dc=com"
+
+# Activated, Account Inactivation, accounts, example.com
+dn: cn=Activated,cn=Account Inactivation,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+cn: Activated
+
+# luna.example.com, masters, ipa, etc, example.com
+dn: cn=luna.example.com,cn=masters,cn=ipa,cn=etc,dc=example,dc=com
+objectClass: top
+objectClass: extensibleObject
+cn: luna.example.com
+dnabase: 1100
+dnainterval: 4
+
+# kdc, sysaccounts, etc, example.com
+dn: uid=kdc,cn=sysaccounts,cn=etc,dc=example,dc=com
+objectClass: account
+objectClass: top
+uid: kdc
+
+# kerberos, example.com
+dn: cn=kerberos,dc=example,dc=com
+objectClass: krbContainer
+objectClass: top
+cn: kerberos
+
+# EXAMPLE.COM, kerberos, example.com
+dn: cn=EXAMPLE.COM,cn=kerberos,dc=example,dc=com
+cn: EXAMPLE.COM
+objectClass: top
+objectClass: krbrealmcontainer
+objectClass: krbticketpolicyaux
+krbSubTrees: dc=example,dc=com
+krbSearchScope: 2
+krbSupportedEncSaltTypes: aes256-cts:normal
+krbSupportedEncSaltTypes: aes128-cts:normal
+krbSupportedEncSaltTypes: des3-hmac-sha1:normal
+krbSupportedEncSaltTypes: arcfour-hmac:normal
+krbSupportedEncSaltTypes: des-hmac-sha1:normal
+krbSupportedEncSaltTypes: des-cbc-md5:normal
+krbSupportedEncSaltTypes: des-cbc-crc:normal
+krbSupportedEncSaltTypes: des-cbc-crc:v4
+krbSupportedEncSaltTypes: des-cbc-crc:afs3
+krbDefaultEncSaltTypes: aes256-cts:normal
+krbDefaultEncSaltTypes: aes128-cts:normal
+krbDefaultEncSaltTypes: des3-hmac-sha1:normal
+krbDefaultEncSaltTypes: arcfour-hmac:normal
+krbDefaultEncSaltTypes: des-hmac-sha1:normal
+krbDefaultEncSaltTypes: des-cbc-md5:normal
+
+# K/M@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=K/M@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerberos,dc=example,dc=
+ com
+krbMaxTicketLife: 604800
+krbMaxRenewableAge: 1209600
+krbTicketFlags: 192
+krbPrincipalName: K/M@EXAMPLE.COM
+krbPrincipalExpiration: 19700101000000Z
+krbLastPwdChange: 19700101000000Z
+krbExtraData:: AALOyvhJZGJfY3JlYXRpb25AR1JFWU9BSy5DT00A
+krbExtraData:: AAcBAAIAAgAAAK2gyrk=
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+
+# krbtgt/EXAMPLE.COM@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=krbtgt/EXAMPLE.COM@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerberos
+ ,dc=example,dc=com
+krbMaxTicketLife: 604800
+krbMaxRenewableAge: 1209600
+krbTicketFlags: 0
+krbPrincipalName: krbtgt/EXAMPLE.COM@EXAMPLE.COM
+krbPrincipalExpiration: 19700101000000Z
+krbLastPwdChange: 19700101000000Z
+krbExtraData:: AALOyvhJZGJfY3JlYXRpb25AR1JFWU9BSy5DT00A
+krbExtraData:: AAcBAAIAAgAAAK2gyrk=
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+
+# kadmin/admin@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=kadmin/admin@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerberos,dc=ex
+ ample,dc=com
+krbMaxTicketLife: 10800
+krbMaxRenewableAge: 1209600
+krbTicketFlags: 4
+krbPrincipalName: kadmin/admin@EXAMPLE.COM
+krbPrincipalExpiration: 19700101000000Z
+krbLastPwdChange: 19700101000000Z
+krbExtraData:: AALOyvhJZGJfY3JlYXRpb25AR1JFWU9BSy5DT00A
+krbExtraData:: AAcBAAIAAnRLLkNPTQA=
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+
+# kadmin/changepw@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=kadmin/changepw@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerberos,dc
+ =example,dc=com
+krbMaxTicketLife: 300
+krbMaxRenewableAge: 1209600
+krbTicketFlags: 8324
+krbPrincipalName: kadmin/changepw@EXAMPLE.COM
+krbPrincipalExpiration: 19700101000000Z
+krbLastPwdChange: 20090429214657Z
+krbExtraData:: AALRyvhJYWRtaW4vYWRtaW5AR1JFWU9BSy5DT00A
+krbExtraData:: AAcBAAIAAnRLLkNPTQA=
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+krbPasswordExpiration: 19700101000000Z
+
+# kadmin/history@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=kadmin/history@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerberos,dc=
+ example,dc=com
+krbMaxTicketLife: 604800
+krbMaxRenewableAge: 1209600
+krbTicketFlags: 0
+krbPrincipalName: kadmin/history@EXAMPLE.COM
+krbPrincipalExpiration: 19700101000000Z
+krbLastPwdChange: 19700101000000Z
+krbExtraData:: AALOyvhJZGJfY3JlYXRpb25AR1JFWU9BSy5DT00A
+krbExtraData:: AAcBAAIAAnRLLkNPTQA=
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+
+# kadmin/luna.example.com@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=kadmin/luna.example.com@EXAMPLE.COM,cn=EXAMPLE.COM,cn=ker
+ beros,dc=example,dc=com
+krbMaxTicketLife: 10800
+krbMaxRenewableAge: 1209600
+krbTicketFlags: 4
+krbPrincipalName: kadmin/luna.example.com@EXAMPLE.COM
+krbPrincipalExpiration: 19700101000000Z
+krbLastPwdChange: 19700101000000Z
+krbExtraData:: AALOyvhJZGJfY3JlYXRpb25AR1JFWU9BSy5DT00A
+krbExtraData:: AAcBAAIAAgAcAHAaybk=
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+
+# ldap/luna.example.com@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=ldap/luna.example.com@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerbe
+ ros,dc=example,dc=com
+krbTicketFlags: 0
+krbPrincipalName: ldap/luna.example.com@EXAMPLE.COM
+krbLastPwdChange: 20090429214655Z
+krbExtraData:: AALPyvhJYWRtaW4vYWRtaW5AR1JFWU9BSy5DT00A
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+krbPasswordExpiration: 19700101000000Z
+
+# host/luna.example.com@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=host/luna.example.com@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerbe
+ ros,dc=example,dc=com
+krbTicketFlags: 0
+krbPrincipalName: host/luna.example.com@EXAMPLE.COM
+krbLastPwdChange: 20090429214656Z
+krbExtraData:: AALQyvhJYWRtaW4vYWRtaW5AR1JFWU9BSy5DT00A
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+krbPasswordExpiration: 19700101000000Z
+
+# HTTP/luna.example.com@EXAMPLE.COM, EXAMPLE.COM, kerberos, example.com
+dn: krbprincipalname=HTTP/luna.example.com@EXAMPLE.COM,cn=EXAMPLE.COM,cn=kerbe
+ ros,dc=example,dc=com
+krbTicketFlags: 0
+krbPrincipalName: HTTP/luna.example.com@EXAMPLE.COM
+krbLastPwdChange: 20090429214658Z
+krbExtraData:: AALSyvhJYWRtaW4vYWRtaW5AR1JFWU9BSy5DT00A
+objectClass: krbprincipal
+objectClass: krbprincipalaux
+objectClass: krbTicketPolicyAux
+objectClass: top
+krbPasswordExpiration: 19700101000000Z
+
+# profile, example.com
+dn: ou=profile,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+ou: profiles
+ou: profile
+
+# automount, example.com
+dn: cn=automount,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: automount
+
+# alt, example.com
+dn: cn=alt,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: alt
+
+# policies, example.com
+dn: cn=policies,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: policies
+
+# replication, etc, example.com
+dn: cn=replication,cn=etc,dc=example,dc=com
+objectClass: nsDS5Replica
+objectClass: top
+nsDS5ReplicaId: 3
+nsDS5ReplicaRoot: dc=example,dc=com
+cn: replication
+
+# auto.master, automount, example.com
+dn: automountmapname=auto.master,cn=automount,dc=example,dc=com
+objectClass: automountMap
+objectClass: top
+automountMapName: auto.master
+
+# auto.direct, automount, example.com
+dn: automountmapname=auto.direct,cn=automount,dc=example,dc=com
+objectClass: automountMap
+objectClass: top
+automountMapName: auto.direct
+
+# hostgroups, accounts, example.com
+dn: cn=hostgroups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: hostgroups
+
+# ng, alt, example.com
+dn: cn=ng,cn=alt,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: ng
+
+# configs, policies, example.com
+dn: cn=configs,cn=policies,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: configs
+ ent applications
+
+# roles, policies, example.com
+dn: cn=roles,cn=policies,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: roles
+
+# b9fc6504-3507-11de-9c63-005056138082, ng, alt, example.com
+dn: ipauniqueid=b9fc6504-3507-11de-9c63-005056138082,cn=ng,cn=alt,dc=example,d
+ c=com
+objectClass: top
+objectClass: ipaAssociation
+objectClass: ipaNISNetgroup
+ipaUniqueID: b9fc6504-3507-11de-9c63-005056138082
+cn: ng1
+nisDomainName: example.com
+description: ng1
+memberUser: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
+memberUser: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
+memberUser: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
+externalHost: external.example.com
+
+# tuser1, users, accounts, example.com
+dn: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
+uid: tuser1
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+objectClass: inetUser
+objectClass: posixAccount
+objectClass: krbPrincipalAux
+loginShell: /bin/sh
+gidNumber: 1002
+gecos: tuser1
+sn: User
+homeDirectory: /home/tuser1
+krbPrincipalName: tuser1@EXAMPLE.COM
+givenName: Tim
+cn: Tim User
+uidNumber: 1100
+memberOf: cn=ipausers,cn=groups,cn=accounts,dc=example,dc=com
+
+# tuser2, users, accounts, example.com
+dn: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
+uid: tuser2
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+objectClass: inetUser
+objectClass: posixAccount
+objectClass: krbPrincipalAux
+loginShell: /bin/sh
+gidNumber: 1002
+gecos: tuser2
+sn: User
+homeDirectory: /home/tuser2
+krbPrincipalName: tuser2@EXAMPLE.COM
+givenName: Timmy
+cn: Timmy User
+uidNumber: 1101
+memberOf: cn=ipausers,cn=groups,cn=accounts,dc=example,dc=com
+
+# g1, groups, accounts, example.com
+dn: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+objectClass: nestedGroup
+objectClass: ipaUserGroup
+cn: g1
+description: g1
+

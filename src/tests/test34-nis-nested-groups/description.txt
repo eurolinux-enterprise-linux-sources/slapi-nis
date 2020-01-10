@@ -1,0 +1,1 @@
+direct group memberships (grp->mem) with memberOf

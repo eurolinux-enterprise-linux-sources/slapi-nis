@@ -1,0 +1,31 @@
+map list:
+stuff
+stuff
+contents of example.com:stuff:
+A,a,1	A,a
+A,a,2	A,b
+A,a,3	A,c
+A,b,1	B,a
+A,b,2	B,b
+A,b,3	B,c
+A,c,1	C,a
+A,c,2	C,b
+A,c,3	C,c
+B,a,1	A,a
+B,a,2	A,b
+B,a,3	A,c
+B,b,1	B,a
+B,b,2	B,b
+B,b,3	B,c
+B,c,1	C,a
+B,c,2	C,b
+B,c,3	C,c
+C,a,1	A,a
+C,a,2	A,b
+C,a,3	A,c
+C,b,1	B,a
+C,b,2	B,b
+C,b,3	B,c
+C,c,1	C,a
+C,c,2	C,b
+C,c,3	C,c

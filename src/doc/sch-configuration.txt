@@ -1,0 +1,78 @@
+The plugin's configuration is entirely devoted to sets of entries or
+groups of those sets.  As a result, the entry contains the standard
+attributes for plugins and nothing more.  An example plugin entry might
+look like this:
+
+  dn: cn=Schema Compatibility, cn=plugins, cn=config
+  objectclass: top
+  objectclass: nsSlapdPlugin
+  objectclass: extensibleObject
+  cn: Schema Compatibility
+  nsslapd-pluginpath: /usr/lib/dirsrv/plugins/schemacompat-plugin.so
+  nsslapd-plugininitfunc: schema_compat_plugin_init
+  nsslapd-plugintype: object
+  nsslapd-pluginenabled: on
+  nsslapd-pluginid: schema-compat
+  nsslapd-version: 0.0
+  nsslapd-pluginvendor: redhat.com
+  nsslapd-plugindescription: Schema Compatibility Plugin
+
+Configuration for individual sets should be stored in entries directly
+beneath the plugin's entry.  These attributes are recognized:
+
+ * schema-compat-container-group
+   The top-level container DN under which this container's entry
+   appears.  This level of grouping is primarily useful when using the
+   ''referred'' function.
+ * schema-compat-container-rdn
+   The RDN of this particular container.  If it's omitted, generated
+   entries will show up directly in the container group.
+ * schema-compat-search-base
+   One or more locations in the directory where candidate entries can be
+   found.
+ * schema-compat-search-filter
+   A filter used to select which candidate entries should have new
+   entries created for them in this container.
+ * schema-compat-entry-rdn
+   The RDN to give to generated entries, which will be stored as
+   children of this container.
+ * schema-compat-entry-attribute
+   Additional attributes to add to each entry in this container.
+
+An pair of example definitions might look like this:
+
+  dn: ou=People,cn=Schema Compatibility, cn=plugins, cn=config
+  objectclass: top
+  objectclass: extensibleObject
+  schema-compat-container-group: cn=compat,cn=Accounts,dc=example,dc=com
+  schema-compat-container-rdn: ou=People
+  schema-compat-search-base: cn=Users,cn=Accounts,dc=example,dc=com
+  schema-compat-search-filter: (objectClass=posixAccount)
+  schema-compat-entry-rdn: uid=%{uid}
+  schema-compat-entry-attribute: objectClass=account
+  schema-compat-entry-attribute: objectClass=posixAccount
+  schema-compat-entry-attribute: objectClass=inetOrgPerson
+  schema-compat-entry-attribute: objectClass=kerberosPrincipalAux
+  schema-compat-entry-attribute: homeDirectory=%{homeDirectory}
+  schema-compat-entry-attribute: uidNumber=%{uidNumber}
+  schema-compat-entry-attribute: gidNumber=%{gidNumber}
+  schema-compat-entry-attribute: loginShell=%{loginShell}
+  schema-compat-entry-attribute: userPassword=*
+  schema-compat-entry-attribute: mail=%{uid}@example.com
+  schema-compat-entry-attribute: krbPrincipalName=%{uid}@EXAMPLE.COM
+
+  dn: ou=Group,cn=Schema Compatibility, cn=plugins, cn=config
+  objectclass: top
+  objectclass: extensibleObject
+  schema-compat-container-group: cn=compat,cn=Accounts,dc=example,dc=com
+  schema-compat-container-rdn: ou=Group
+  schema-compat-search-base: cn=Groups,cn=Accounts,dc=example,dc=com
+  schema-compat-search-filter: (objectClass=posixGroup)
+  schema-compat-entry-rdn: cn=%{cn}
+  schema-compat-entry-attribute: objectClass=posixGroup
+  schema-compat-entry-attribute: gidNumber=%{gidNumber}
+  schema-compat-entry-attribute: userPassword=*
+  schema-compat-entry-attribute: memberUid=%{memberUid}
+  schema-compat-entry-attribute: memberUid=%deref("member","uid")
+  schema-compat-entry-attribute: memberUid=%referred("ou=People","memberOf","uid")
+

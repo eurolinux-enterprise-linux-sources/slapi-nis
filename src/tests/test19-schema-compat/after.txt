@@ -1,0 +1,12 @@
+dn: cn=ng,cn=compat,dc=example,dc=com
+objectClass: extensibleObject
+cn: ng
+
+dn: cn=ng1,cn=ng,cn=compat,dc=example,dc=com
+objectClass: nisNetgroup
+objectClass: top
+nisNetgroupTriple: (external.example.com,tuser1,example.com)
+nisNetgroupTriple: (-,tuser2,example.com)
+nisNetgroupTriple: (external.example.com,-,example.com)
+cn: ng1
+

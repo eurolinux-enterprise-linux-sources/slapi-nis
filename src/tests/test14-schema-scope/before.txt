@@ -1,0 +1,150 @@
+[cn=bogus_subentry,cn=bogus_entry,cn=bogus_set,cn=compat,cn=accounts,dc=example,dc=com:base]
+result: 32 No such object
+matchedDN: cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,cn=bogus_entry,cn=bogus_set,cn=compat,cn=accounts,dc=example,dc=com:one]
+result: 32 No such object
+matchedDN: cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,cn=bogus_entry,cn=bogus_set,cn=compat,cn=accounts,dc=example,dc=com:sub]
+result: 32 No such object
+matchedDN: cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,cn=bogus_entry,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:base]
+result: 32 No such object
+matchedDN: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,cn=bogus_entry,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:one]
+result: 32 No such object
+matchedDN: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,cn=bogus_entry,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:sub]
+result: 32 No such object
+matchedDN: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:base]
+result: 32 No such object
+matchedDN: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:one]
+result: 32 No such object
+matchedDN: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+[cn=bogus_subentry,uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:sub]
+result: 32 No such object
+matchedDN: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+[uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:base]
+result: 0 Success
+dn: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+
+[uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:one]
+result: 0 Success
+
+[uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:sub]
+result: 0 Success
+dn: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+
+[ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:base]
+result: 0 Success
+dn: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+
+[ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:one]
+result: 0 Success
+dn: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1b,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1c,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+
+[ou=passwd,cn=compat,cn=accounts,dc=example,dc=com:sub]
+result: 0 Success
+dn: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1b,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1c,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+
+[cn=compat,cn=accounts,dc=example,dc=com:base]
+result: 0 Success
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+
+[cn=compat,cn=accounts,dc=example,dc=com:one]
+result: 0 Success
+dn: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+
+[cn=compat,cn=accounts,dc=example,dc=com:sub]
+result: 0 Success
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+dn: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1b,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1c,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+
+[cn=accounts,dc=example,dc=com:base]
+result: 0 Success
+dn: cn=Accounts,dc=example,dc=com
+
+
+[cn=accounts,dc=example,dc=com:one]
+result: 0 Success
+dn: cn=Groups1,cn=Accounts,dc=example,dc=com
+
+dn: cn=Groups2,cn=Accounts,dc=example,dc=com
+
+dn: cn=Users1,cn=Accounts,dc=example,dc=com
+
+dn: cn=Users2,cn=Accounts,dc=example,dc=com
+
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+
+[cn=accounts,dc=example,dc=com:sub]
+result: 0 Success
+dn: cn=Accounts,dc=example,dc=com
+
+dn: cn=Groups1,cn=Accounts,dc=example,dc=com
+
+dn: cn=Groups2,cn=Accounts,dc=example,dc=com
+
+dn: cn=Users1,cn=Accounts,dc=example,dc=com
+
+dn: cn=Users2,cn=Accounts,dc=example,dc=com
+
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+dn: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1a,cn=Users1,cn=Accounts,dc=example,dc=com
+
+dn: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1b,cn=Users1,cn=Accounts,dc=example,dc=com
+
+dn: uid=user1b,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1c,cn=Users1,cn=Accounts,dc=example,dc=com
+
+dn: uid=user1c,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user2a,cn=Users2,cn=Accounts,dc=example,dc=com
+
+dn: uid=user2b,cn=Users2,cn=Accounts,dc=example,dc=com
+
+dn: uid=user2c,cn=Users2,cn=Accounts,dc=example,dc=com
+
+

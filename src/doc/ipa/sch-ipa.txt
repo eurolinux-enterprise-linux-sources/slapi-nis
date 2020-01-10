@@ -1,0 +1,41 @@
+= The Schema Compatibility Plugin in IPA =
+
+RFC 2307 defines object classes and attributes suitable for representing
+various POSIX-related information in a directory.  The "posixGroup"
+object class, for example, models a group of accounts, including the
+POSIX group's ID (as the value of the "gidNumber" attribute) and the
+names of each of the members of the group (as values of the "memberUid"
+attribute).
+
+This representation is supported by the native LDAP client software
+supplied with a number of Unix and Unix-like operating systems.
+
+The draft revision of RFC 2307, known as "rfc2307bis", modifies the
+contents of a group so that it no longer contains the names of its
+members in the "memberUid" attribute, but rather uses the "member"
+attribute to list the distinguished names of the entries which represent
+the individual members.  A client is typically expected to search the
+named entries to determine the names of the group's member users.
+
+It is this representation of groups which FreeIPA and RHEIPA use.
+
+This representation is not as well-supported by the native LDAP client
+software supplied with Unix and Unix-like operating systems.
+
+When configured to consult a server which stores information this way, a
+client which does not support reading group membership from the "member"
+attribute will still able to look up a group and read its name and ID,
+but will be unable to "see" the members of the group.
+
+For these clients, an IPA server can be configured to use the Schema
+Compatibility Plugin to resolve the group membership at the server.  The
+plugin will examine the group entries stored in the server and, as
+configured, read the distinguished names of the members of those groups.
+It will examine the named entries and read from them the names of the
+members of the group.  It will then use that data to create an in-memory
+entry, elsewhere in the directory tree, which contains the group
+membership information in a form which the client is able to process.
+
+As configured, an IPA server provides this information, for groups whose
+entries are beneath "cn=groups, cn=accounts, $SUFFIX", in an area
+beneath "cn=groups, cn=compat, $SUFFIX".

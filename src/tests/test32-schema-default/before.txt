@@ -1,0 +1,6 @@
+dn: cn=(unset),cn=users,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=BINGO,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=Tim User,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=users,cn=compat,cn=accounts,dc=example,dc=com
+dn: uid=tuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com

@@ -1,0 +1,2 @@
+modifying entry "uid=user, cn=Accounts, dc=example, dc=com"
+

@@ -1,0 +1,17 @@
+map list:
+test
+users
+test
+users
+contents of example.com:test:
+group1	is-not-group2
+group2	is-group2
+group2-alternate-name	ifeq-handles-bogus-attrs-correctly
+contents of example.com:users:
+user1	user1:user1
+user1a	user1a:User 1 A
+user1b	user1b:User 1 B
+user1c	user1c:User 1 C
+user2a	user2a:User 2 A
+user2b	user2b:User 2 B
+user2c	user2c:User 2 C

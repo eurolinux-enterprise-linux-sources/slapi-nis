@@ -1,0 +1,259 @@
+= Getting Started with the NIS Server Plugin =
+
+As an example, let's set up a NIS server to serve user and group
+information for a domain named "example.com".
+
+Because NIS servers need to listen on privileged ports, and because the
+directory server is usually configured to drop privileges at startup,
+getting the plugin running is usually a two-step process.  First, the
+server must be configured to load the plugin, and then the server must
+be restarted to actually get the plugin loaded.
+
+== Loading the plugin ==
+
+While the server is running (or not), add an entry like this to the
+cn=config tree:
+
+    dn: cn=NIS Server, cn=plugins, cn=config
+    objectClass: top
+    objectClass: nsSlapdPlugin
+    objectClass: extensibleObject
+    cn: NIS Server
+    nsslapd-pluginPath: /usr/lib/dirsrv/plugins/nisserver-plugin.so
+    nsslapd-pluginInitfunc: nis_plugin_init
+    nsslapd-pluginType: postoperation
+    nsslapd-pluginEnabled: on
+    nsslapd-pluginDescription: NIS Server Plugin
+    nsslapd-pluginVendor: redhat.com
+    nsslapd-pluginVersion: 0
+    nsslapd-pluginID: nis-plugin
+    nis-tcp-wrappers-name: ypserv
+    nsslapd-pluginarg0: 541
+
+The name of the entry can be anything you like, but the path to the
+plugin itself needs to be correct for your system.
+
+In this example, we set the options that are required for loading a
+plugin (the path, init function, the type of object, and so on) and two
+options which are specific to the module -- the name used when
+evaluating the tcp_wrappers (/etc/hosts.allow and /etc/hosts.deny)
+configuration, and the port number on which we want the server to
+listen.  We could leave the port number unset and let the server select
+a port at startup-time, but my example system is firewalled, and I need
+to know which port it'll be using in order to punch a hole in the
+firewall for it.
+
+If the entry was added to a running server, then the server should be
+restarted.  Running the "/usr/sbin/rpcinfo -p | grep ypserv" command
+should now show that the server is running and listening on port 541:
+
+    # /usr/sbin/rpcinfo -p | grep ypserv
+    100004    2   udp    541  ypserv
+    100004    2   tcp    541  ypserv
+
+The module itself isn't configured to serve any maps for any domains
+yet, but we're doing pretty well so far.
+
+== Configuring a Domain and a Map ==
+
+Before we can start serving any data using the NIS protocols, we need to
+have some idea of what the data in the directory looks like.  For this
+example, we'll assume that the directory's main naming suffix is
+"dc=example, dc=com", that under it there are separate containers for
+users and groups with relative names "ou=People" and "ou=Groups",
+respectively, and that we have two users ("timtom" and "kevin") who both
+belong to two groups ("minions" and "moppets").  The tree looks
+something like this:
+
+   + dc=example,dc=com
+     + ou=People,dc=example,dc=com
+       + uid=timtom,ou=People,dc=example,dc=com
+       + uid=kevin,ou=People,dc=example,dc=com
+     + ou=Groups,dc=example,dc=com
+       + cn=minions,ou=Groups,dc=example,dc=com
+       + cn=moppets,ou=Groups,dc=example,dc=com
+
+In order to expose data from directory server entries via a NIS map, the
+plugin needs to be provided with enough information to let it find the
+set of directory entries which need to be exposed, and it needs to be
+provided with instructions for building the key/value pairs which
+constitute the map by using the contents of those entries.  Of course,
+it also needs to know the name of the NIS domain and the map's name.
+
+The plugin expects that information to be provided in an entry which is
+an immediate child of the entry which caused the plugin to be loaded.
+To avoid having to make up a more meaningful name, we'll just use the
+combination of the map name and the domain name to name the map's
+configuration entry.
+
+    dn: nis-domain=example.com+nis-map=users,cn=NIS Server,cn=plugins,cn=config
+    objectclass: extensibleObject
+    nis-domain: example.com
+    nis-map: users
+    nis-base: ou=People, dc=example, dc=com
+    nis-filter: (objectClass=posixAccount)
+    nis-key-format: %{uid}
+    nis-value-format: %{uid}
+
+In this example, we've defined a map named "users" in a domain named
+"example.com".  The entries which will be used to construct the map's
+contents will be found by performing a subtree search starting at
+"ou=People,dc=example,dc=com" for entries matching the filter
+"(objectClass=posixAccount").  For each entry that is found by the
+search, the "uid" attribute will be used as the key in the NIS map, and
+the corresponding value will also be the value of the "uid" attribute.
+
+And just like that, our NIS server is serving the domain, and the
+"ypbind" service running on a client system will be able to find it.  Of
+course, that domain contains only one not-very-useful map, but that's a
+different problem.
+
+== Formatting Entries ==
+
+So far, we've set up a map named "users" which contains the names of our
+users, but we want to be able to provide more than just the user's name.
+Going back to the configuration for the map, we can see that we set the
+configuration entry's "nis-value-format" attribute to "%{uid}".  This
+attribute holds a format specifier, and changing that format specifier
+is how we'll provide more information about the user.
+
+The format specifier syntax is similar to the use of shell variables in
+scripts.  Attributes can be referenced and intermixed with literal text.
+A simple-but-usable specification for a user entry might look like this:
+
+    %{uid}:%{userPassword}:%{uidNumber}:%{gidNumber}:%{cn}:%{homeDirectory}:%{loginShell}
+
+We shouldn't just use that as-is, though, because it could create a few
+problems.  First, as a safety measure, if any attribute which is
+referenced in a key or value format isn't part of an entry, that entry
+will be ignored.  This is done to prevent empty values from showing up
+in unexpected places, for example where the user's numeric UID should
+be.  Client software which doesn't check the data could easily treat an
+empty numeric UID field as a "0", for example, which would be a problem.
+
+Other attributes, however, should be allowed to not be given.  The
+schema for user accounts makes a "loginShell" optional, and in order to
+support that, the plugin borrows a bit of shell syntax to allow default
+and alternate values to be used.
+
+To make use of the entry's "loginShell" attribute, but to use the value
+"/bin/bash" if it doesn't contain that attribute, we can reference it
+like so:
+
+   %{loginShell:-/bin/bash}
+
+The default or alternate value is recursively evaluated, so it, too, can
+reference other variables.  This is useful for user attributes, such as
+the GECOS attribute, which typically contain the user's name:
+
+   %{gecos:-%{cn:-Some Unnamed User}}
+
+Because attributes which hold non-security-sensitive information are
+often allowed to be edited by users, a user could attempt to throw
+client software off by abusing that ability.  (For example, the fields
+in a user's passwd entry are separated by a ":" character, and the
+directory server doesn't prohibit that from being used in a "cn"
+attribute, so a user could try adding a ":" to their name.)  If the
+format specifier looked like this:
+
+    %{uid}:%{userPassword}:%{uidNumber}:%{gidNumber}:%{cn}:%{homeDirectory}:%{loginShell}
+
+The resulting entry value could look like this:
+
+   timtom:*:1000:1000:Tim:Tom 0wns:/home/timtom:/bin/bash
+
+We can prohibit these kinds of shenanigans by configuring the map to
+reject any attribute value which contains a particular character, by
+setting a "nis-disallowed-chars" value in the map's configuration entry.
+
+    dn: nis-domain=example.com+nis-map=users,cn=NIS Server,cn=plugins,cn=config
+    objectclass: extensibleObject
+    nis-domain: example.com
+    nis-map: users
+    nis-base: ou=People, dc=example, dc=com
+    nis-filter: (objectClass=posixAccount)
+    nis-key-format: %{uid}
+    nis-value-format: %{uid}:%{userPassword-:*}:%{uidNumber}:%{gidNumber}:%{gecos:-%{cn:-Some Unnamed User}}:%{homeDirectory}:%{loginShell:-/bin/bash}
+    nis-disallowed-chars: :
+
+Format specifiers are described in more detail in "format-specifiers.txt".
+
+== Functions ==
+
+We have another problem: the user has multiple values for the
+"userPassword" attribute.  One of them looks like a Unix-style hash:
+
+    {CRYPT}sa3tHJ3/KuYvI
+
+The other is a plaintext password, and we don't want to expose that.
+To provide a solution, the plugin's format specifier syntax also
+provides a small number of function-like operators.  In this case, we
+can use the one called "regsub" to:
+
+    * Try to select one value by using a regular expression.
+    * If a match is found, construct the value which will be used.
+    * If a match is not found, use a default value.
+
+Depending on whether or not we want a default value, the "regsub"
+function takes either three or four arguments:
+
+    %regsub(EXPRESSION,PATTERN,TEMPLATE[,DEFAULT_EXPRESSION])
+
+In this case, selecting the "userPassword" value which matches the
+regular expression "^\{CRYPT\}(..*)", building the result using the
+first substring match, and providing a default value of "*" if no
+matches are found can be done like so:
+
+    %regsub("%{userPassword}","^\{CRYPT\}(..*)","%1","*")
+
+Other matching functions are provided to perform wildcard matches
+("match") and regular expression matches ("regmatch").
+
+The parameters passed to functions need to be enclosed in quotation
+marks and separated by a ",".
+
+Now our configuration entry will correctly serve any {CRYPT}-style
+passwords which are present in entries.
+
+    dn: nis-domain=example.com+nis-map=users,cn=NIS Server,cn=plugins,cn=config
+    objectclass: extensibleObject
+    nis-domain: example.com
+    nis-map: users
+    nis-base: ou=People, dc=example, dc=com
+    nis-filter: (objectClass=posixAccount)
+    nis-key-format: %{uid}
+    nis-value-format: %{uid}:%regsub("%{userPassword}","^\{CRYPT\}(..*)","%1","*"):%{uidNumber}:%{gidNumber}:%{gecos:-%{cn:-Some Unnamed User},,,}:%{homeDirectory}:%{loginShell:-/bin/bash}
+    nis-disallowed-chars: :,
+
+The module provides more function-like operators than just %regsub(),
+but most of those aren't useful when examining user entries.  They turn
+out to be more useful when examining entries which represent other types
+of information, particularly groups.  They, too, are described in the
+"format-specifiers.txt" documentation.
+
+== Defaults ==
+
+In order to save time, the plugin includes compiled-in default entry
+filters and default key and value format specifiers which correspond for
+commonly-used map names.  Using the default settings is recommended
+because they will always be the most correct settings that the project
+maintainer(s) know of.  To use the defaults for a map, simply omit them
+from the configuration:
+
+    dn: nis-domain=example.com+nis-map=passwd.byname,cn=NIS Server,cn=plugins,cn=config
+    objectclass: extensibleObject
+    nis-domain: example.com
+    nis-map: passwd.byname
+    nis-base: ou=People, dc=example, dc=com
+
+    dn: nis-domain=example.com+nis-map=passwd.byuid,cn=NIS Server,cn=plugins,cn=config
+    objectclass: extensibleObject
+    nis-domain: example.com
+    nis-map: passwd.byuid
+    nis-base: ou=People, dc=example, dc=com
+
+The above configuration sets up both the "passwd.byname" and
+"passwd.byuid" maps using the default key and value specifiers, which
+should work correctly for most cases.  Likewise, the module has compiled
+into it suitable defaults for a number of common NIS maps.  The full
+list is stored in "nis-known-maps.txt".

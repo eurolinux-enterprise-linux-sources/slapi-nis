@@ -1,0 +1,13 @@
+map list:
+passwd.byname
+passwd.byuid
+passwd.byname
+passwd.byuid
+contents of example.com:passwd.byname:
+user2a	user2a:*:2001:2001:User 2 A:/home/user2a:/bin/sh
+user2b	user2b:*:2002:2002:User 2 B:/home/user2b:/bin/sh
+user2c	user2c:*:2003:2003:User 2 C:/home/user2c:/bin/sh
+contents of example.com:passwd.byuid:
+2001	user2a:*:2001:2001:User 2 A:/home/user2a:/bin/sh
+2002	user2b:*:2002:2002:User 2 B:/home/user2b:/bin/sh
+2003	user2c:*:2003:2003:User 2 C:/home/user2c:/bin/sh
