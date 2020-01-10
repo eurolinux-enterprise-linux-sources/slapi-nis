@@ -6,15 +6,19 @@
 
 Name:		slapi-nis
 Version:	0.40
-Release:	1%{?dist}
+Release:	3%{?dist}
 Summary:	NIS Server and Schema Compatibility plugins for Directory Server
 Group:		System Environment/Daemons
 License:	GPLv2
 URL:		http://slapi-nis.fedorahosted.org/
 Source0:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz
 Source1:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz.sig
+Patch0:		slapi-nis-0.40-leak.patch
+Patch1:		slapi-nis-0.40-notxns.patch
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires:	389-ds-base-devel, %{ldap_impl}-devel
+BuildRequires:	389-ds-base-devel >= 1.2.10, %{ldap_impl}-devel
+BuildRequires:	autoconf, automake, libtool
+Requires: 389-ds-base >= 1.2.10
 BuildRequires:	nspr-devel, nss-devel, /usr/bin/rpcgen
 %if 0%{?fedora} > 6 || 0%{?rhel} > 5
 BuildRequires: tcp_wrappers-devel
@@ -43,6 +47,9 @@ for attributes from multiple entries in the tree.
 
 %prep
 %setup -q
+%patch0 -p1 -b .leak
+%patch1 -p1 -b .notxns
+autoreconf -f -i
 
 %build
 %configure --disable-static --with-tcp-wrappers --with-ldap=%{ldap_impl}
@@ -70,6 +77,14 @@ rm -rf $RPM_BUILD_ROOT
 %{_sbindir}/nisserver-plugin-defs
 
 %changelog
+* Fri Aug 24 2012 Nalin Dahyabhai <nalin@redhat.com> - 0.40-3
+- backport fix for a slow memory leak (#840926)
+- tweak configure to disable explicit (wrong) transaction support (#829502)
+
+* Wed Jun  6 2012 Nalin Dahyabhai <nalin@redhat.com> - 0.40-2
+- add explicit build-time and install-time dependencies on 389-ds-base 1.2.10,
+  so that we know we build with transaction support (#829502)
+
 * Fri Mar 30 2012 Nalin Dahyabhai <nalin@redhat.com> - 0.40-1
 - treat padding values passed to the "link" function as expressions to be
   evaluated rather than simply as literal values (part of #767372)

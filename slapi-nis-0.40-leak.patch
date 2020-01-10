@@ -1,0 +1,178 @@
+commit 1cc82b3899e2988143fede0c377be865abdea1e8
+Author: Nalin Dahyabhai <nalin@redhat.com>
+Date:   Tue May 22 12:53:04 2012 -0400
+
+    - fix a leak
+    
+    We assumed that slapi_mods_add_smod() took ownership of the smod that we
+    pass in, when it really just keeps the contents.
+
+diff --git a/src/back-shr.c b/src/back-shr.c
+index cb0cdb3..101b857 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -1753,15 +1753,6 @@ backend_shr_modify_entry_cb(const char *group, const char *set, bool_t flag,
+ 	return TRUE;
+ }
+ 
+-static Slapi_Mod *
+-backend_shr_mod_as_smod(LDAPMod *mod)
+-{
+-	Slapi_Mod *ret;
+-	ret = slapi_mod_new();
+-	slapi_mod_init_byval(ret, mod);
+-	return ret;
+-}
+-
+ /* Walk the list of mods, picking out those which won't have an effect, and
+  * adding the rest to the "relevant" list. */
+ static void
+@@ -1769,6 +1760,7 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 		        Slapi_Mods *relevant)
+ {
+ 	LDAPMod *mod;
++	Slapi_Mod *smod;
+ 	Slapi_ValueSet *values;
+ 	Slapi_Value *mval;
+ 	const struct berval *mbv;
+@@ -1780,13 +1772,16 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 		return;
+ 	}
+ 	mval = slapi_value_new();
++	smod = slapi_mod_new();
+ 	for (i = 0; mods[i] != NULL; i++) {
+ 		mod = mods[i];
+ 		if (slapi_vattr_values_get(pre, mod->mod_type, &values,
+ 					   &disposition, &actual_attr,
+ 					   0, &buffer_flags) != 0) {
+ 			/* error of some kind, punt */
+-			slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++			slapi_mod_init_byval(smod, mod);
++			slapi_mods_add_ldapmod(relevant,
++					       slapi_mod_get_ldapmod_passout(smod));
+ 			continue;
+ 		}
+ 		if (SLAPI_IS_MOD_DELETE(mod->mod_op)) {
+@@ -1796,7 +1791,9 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 				if (mod->mod_op & LDAP_MOD_BVALUES) {
+ 					if (mod->mod_vals.modv_bvals == NULL) {
+ 						/* request is to remove all values */
+-						slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++						slapi_mod_init_byval(smod, mod);
++						slapi_mods_add_ldapmod(relevant,
++								       slapi_mod_get_ldapmod_passout(smod));
+ 					} else
+ 					for (j = 0; mod->mod_vals.modv_bvals[j] != NULL; j++) {
+ 						mbv = mod->mod_vals.modv_bvals[j];
+@@ -1804,14 +1801,18 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 						if ((slapi_vattr_value_compare(pre, mod->mod_type, mval, &result, 0) == 0) &&
+ 						    (result == 1)) {
+ 							/* request is to remove a value that is present */
+-							slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++							slapi_mod_init_byval(smod, mod);
++							slapi_mods_add_ldapmod(relevant,
++									       slapi_mod_get_ldapmod_passout(smod));
+ 							break;
+ 						}
+ 					}
+ 				} else {
+ 					if (mod->mod_vals.modv_strvals == NULL) {
+ 						/* request is to remove all values */
+-						slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++						slapi_mod_init_byval(smod, mod);
++						slapi_mods_add_ldapmod(relevant,
++								       slapi_mod_get_ldapmod_passout(smod));
+ 					} else
+ 					for (j = 0; mod->mod_vals.modv_strvals[j] != NULL; j++) {
+ 						msv.bv_val = mod->mod_vals.modv_strvals[j];
+@@ -1820,7 +1821,9 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 						if ((slapi_vattr_value_compare(pre, mod->mod_type, mval, &result, 0) == 0) &&
+ 						    (result == 1)) {
+ 							/* request is to remove a value that is present */
+-							slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++							slapi_mod_init_byval(smod, mod);
++							slapi_mods_add_ldapmod(relevant,
++									       slapi_mod_get_ldapmod_passout(smod));
+ 							break;
+ 						}
+ 					}
+@@ -1838,7 +1841,9 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 						if ((slapi_vattr_value_compare(pre, mod->mod_type, mval, &result, 0) != 0) ||
+ 						    (result != 1)) {
+ 							/* request is to add a value that is not present */
+-							slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++							slapi_mod_init_byval(smod, mod);
++							slapi_mods_add_ldapmod(relevant,
++									       slapi_mod_get_ldapmod_passout(smod));
+ 							break;
+ 						}
+ 					}
+@@ -1852,7 +1857,9 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 						if ((slapi_vattr_value_compare(pre, mod->mod_type, mval, &result, 0) != 0) ||
+ 						    (result != 1)) {
+ 							/* request is to add a value that is not present */
+-							slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++							slapi_mod_init_byval(smod, mod);
++							slapi_mods_add_ldapmod(relevant,
++									       slapi_mod_get_ldapmod_passout(smod));
+ 							break;
+ 						}
+ 					}
+@@ -1871,7 +1878,9 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 				}
+ 				if (slapi_valueset_count(values) != j) {
+ 					/* different number of values */
+-					slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++					slapi_mod_init_byval(smod, mod);
++					slapi_mods_add_ldapmod(relevant,
++							       slapi_mod_get_ldapmod_passout(smod));
+ 				} else {
+ 					for (j = 0;
+ 					     (mod->mod_vals.modv_bvals != NULL) &&
+@@ -1882,7 +1891,9 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 						if ((slapi_vattr_value_compare(pre, mod->mod_type, mval, &result, 0) != 0) ||
+ 						    (result != 1)) {
+ 							/* request includes a value that is not present */
+-							slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++							slapi_mod_init_byval(smod, mod);
++							slapi_mods_add_ldapmod(relevant,
++									       slapi_mod_get_ldapmod_passout(smod));
+ 							break;
+ 						}
+ 					}
+@@ -1895,7 +1906,9 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 				}
+ 				if (slapi_valueset_count(values) != j) {
+ 					/* different number of values */
+-					slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++					slapi_mod_init_byval(smod, mod);
++					slapi_mods_add_ldapmod(relevant,
++							       slapi_mod_get_ldapmod_passout(smod));
+ 				} else {
+ 					for (j = 0;
+ 					     (mod->mod_vals.modv_strvals != NULL) &&
+@@ -1907,17 +1920,22 @@ backend_shr_filter_mods(LDAPMod **mods, Slapi_Entry *pre, Slapi_Entry *post,
+ 						if ((slapi_vattr_value_compare(pre, mod->mod_type, mval, &result, 0) != 0) ||
+ 						    (result != 1)) {
+ 							/* request includes a value that is not present */
+-							slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++							slapi_mod_init_byval(smod, mod);
++							slapi_mods_add_ldapmod(relevant,
++									       slapi_mod_get_ldapmod_passout(smod));
+ 							break;
+ 						}
+ 					}
+ 				}
+ 			}
+ 		} else {
+-			slapi_mods_add_smod(relevant, backend_shr_mod_as_smod(mod));
++			slapi_mod_init_byval(smod, mod);
++			slapi_mods_add_ldapmod(relevant,
++					       slapi_mod_get_ldapmod_passout(smod));
+ 		}
+ 		slapi_vattr_values_free(&values, &actual_attr, buffer_flags);
+ 	}
++	slapi_mod_free(&smod);
+ 	slapi_value_free(&mval);
+ }
+ 

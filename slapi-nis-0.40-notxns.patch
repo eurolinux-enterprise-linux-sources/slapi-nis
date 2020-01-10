@@ -1,0 +1,28 @@
+--- slapi-nis-0.40/configure.ac
++++ slapi-nis-0.40/configure.ac
+@@ -111,25 +111,6 @@ dirsrv)
+ 		       ,,,
+ 		       [AC_INCLUDES_DEFAULT
+ 		        #include <dirsrv/slapi-plugin.h>])
+-	AH_VERBATIM(USE_SLAPI_BE_TXNS,[
+-#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_ADD_FN
+-#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODIFY_FN
+-#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODRDN_FN
+-#ifdef HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_DELETE_FN
+-#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_ADD_FN
+-#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODIFY_FN
+-#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_MODRDN_FN
+-#if    HAVE_DECL_SLAPI_PLUGIN_BE_TXN_POST_DELETE_FN
+-/* Define to update our data after commits rather than after all modifications. */
+-#define USE_SLAPI_BE_TXNS 1
+-#endif
+-#endif
+-#endif
+-#endif
+-#endif
+-#endif
+-#endif
+-#endif])
+ 	CFLAGS="$saved_CFLAGS"
+ 	LIBS="$saved_LIBS"
+ 	thread_api=NSPR
