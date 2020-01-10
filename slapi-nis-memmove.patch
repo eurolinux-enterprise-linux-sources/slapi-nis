@@ -1,0 +1,39 @@
+commit da661ba56130fa33118d50dcda086853275898a8
+Author: Nalin Dahyabhai <nalin@dahyabhai.net>
+Date:   Mon Dec 16 12:29:57 2013 -0500
+
+    Removing domains and maps correctly
+    
+    On domain or map removal, fill in gaps in the list of domains or maps
+    correctly.
+
+diff --git a/src/map.c b/src/map.c
+index ad3ed3f..ff18fcf 100644
+--- a/src/map.c
++++ b/src/map.c
+@@ -801,8 +801,8 @@ map_data_unset_map(struct plugin_state *state,
+ 			/* Close the hole in the array. */
+ 			domain->n_maps--;
+ 			if (i != domain->n_maps) {
+-				memcpy(&domain->maps[i], &domain->maps[i + 1],
+-				       sizeof(*map) * (domain->n_maps - i));
++				memmove(&domain->maps[i], &domain->maps[i + 1],
++				        sizeof(*map) * (domain->n_maps - i));
+ 			}
+ 			break;
+ 		}
+@@ -820,10 +820,10 @@ map_data_unset_map(struct plugin_state *state,
+ 				/* Fill in the hole in the domains array. */
+ 				map_data.n_domains--;
+ 				if (i != map_data.n_domains) {
+-					memcpy(&map_data.domains[i],
+-					       &map_data.domains[i + 1],
+-					       sizeof(*domain) *
+-					       (map_data.n_domains - i));
++					memmove(&map_data.domains[i],
++					        &map_data.domains[i + 1],
++					        sizeof(*domain) *
++					        (map_data.n_domains - i));
+ 				}
+ 				break;
+ 			}

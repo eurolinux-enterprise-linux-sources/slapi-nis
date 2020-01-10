@@ -6,7 +6,7 @@
 
 Name:		slapi-nis
 Version:	0.40
-Release:	4%{?dist}
+Release:	6%{?dist}
 Summary:	NIS Server and Schema Compatibility plugins for Directory Server
 Group:		System Environment/Daemons
 License:	GPLv2
@@ -17,6 +17,9 @@ Patch0:		slapi-nis-0.40-leak.patch
 Patch1:		slapi-nis-0.40-notxns.patch
 Patch2:		slapi-nis-0.40-xdrfree.patch
 Patch3:		slapi-nis-0.40-multiplex.patch
+Patch4:		slapi-nis-0.40-xdrfree2.patch
+Patch5:		slapi-nis-0.40-entryaddremove.patch
+Patch6:		slapi-nis-memmove.patch
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:	389-ds-base-devel >= 1.2.10, %{ldap_impl}-devel
 BuildRequires:	autoconf, automake, libtool
@@ -53,6 +56,9 @@ for attributes from multiple entries in the tree.
 %patch1 -p1 -b .notxns
 %patch2 -p1 -b .xdrfree
 %patch3 -p1 -b .multiplex
+%patch4 -p1 -b .xdrfree2
+%patch5 -p1 -b .entryaddremove
+%patch6 -p1 -b .memmove
 autoreconf -f -i
 
 %build
@@ -81,6 +87,15 @@ rm -rf $RPM_BUILD_ROOT
 %{_sbindir}/nisserver-plugin-defs
 
 %changelog
+* Tue Mar 25 2014 Nalin Dahyabhai <nalin@redhat.com> - 0.40-6
+- backport fix to not ignore modifications that affect whether or not an
+  entry shows up in a compat map (#1056648)
+- backport fix to avoid potential crashes on domain or map removal (#1043639)
+
+* Tue Dec 10 2013 Nalin Dahyabhai <nalin@redhat.com> - 0.40-5
+- backport fix for an additional leak parsing the contents of a yp_all()
+  request (#1039942)
+
 * Thu Jul 25 2013 Nalin Dahyabhai <nalin@redhat.com> - 0.40-4
 - backport fix for request argument memory leaks in NIS server (#967468)
 - backport fix for dispatching for multiple connected clients in the NIS

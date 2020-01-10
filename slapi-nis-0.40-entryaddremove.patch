@@ -1,0 +1,430 @@
+commit 4f13ba5eb7712a831de2e3e3bb1b398a8d30387f
+Author: Nalin Dahyabhai <nalin@redhat.com>
+Date:   Thu Apr 4 13:25:29 2013 -0400
+
+    don't skip changes that only affect map membership
+    
+    When checking if we can skip processing for a given change, pay
+    attention to whether or not the changes cause the entry to need to be
+    added or removed from a map (#912673).
+
+diff --git a/src/back-shr.c b/src/back-shr.c
+index 97fa2e2..e238a19 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -1677,17 +1677,22 @@ backend_shr_modify_entry_cb(const char *group, const char *set, bool_t flag,
+ 			}
+ 		}
+ 		if (mod == NULL) {
+-			slapi_log_error(SLAPI_LOG_PLUGIN,
+-					cbdata->state->plugin_desc->spd_id,
+-					"no interesting changes for "
+-					"\"%s\"/\"%s\" made in (\"%s\") "
+-					"(%s not in %s)\n",
+-					set_data->group,
+-					set_data->set,
+-					cbdata->ndn,
+-					cbdata->modlist ? cbdata->modlist : "",
+-					backend_shr_get_rel_attr_list(set_data));
+-			return TRUE;
++			if (backend_shr_entry_matches_set(set_data, cbdata->pb,
++							  cbdata->e_pre) ==
++			    backend_shr_entry_matches_set(set_data, cbdata->pb,
++							  cbdata->e_post)) {
++				slapi_log_error(SLAPI_LOG_PLUGIN,
++						cbdata->state->plugin_desc->spd_id,
++						"no interesting changes for "
++						"\"%s\"/\"%s\" made in (\"%s\") "
++						"(%s not in %s)\n",
++						set_data->group,
++						set_data->set,
++						cbdata->ndn,
++						cbdata->modlist ? cbdata->modlist : "",
++						backend_shr_get_rel_attr_list(set_data));
++				return TRUE;
++			}
+ 		} else {
+ 			slapi_log_error(SLAPI_LOG_PLUGIN,
+ 					cbdata->state->plugin_desc->spd_id,
+diff --git a/tests/test33-schema-modify-entry/after.sh b/tests/test33-schema-modify-entry/after.sh
+new file mode 100755
+index 0000000..151dcab
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/after.sh
+@@ -0,0 +1,2 @@
++#!/bin/sh
++search -b cn=compat,cn=accounts,dc=example,dc=com dn gidNumber | $LDIFSORT
+diff --git a/tests/test33-schema-modify-entry/after.txt b/tests/test33-schema-modify-entry/after.txt
+new file mode 100644
+index 0000000..9c92512
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/after.txt
+@@ -0,0 +1,7 @@
++dn: cn=compat,cn=accounts,dc=example,dc=com
++
++dn: cn=g2,ou=group,cn=compat,cn=accounts,dc=example,dc=com
++gidNumber: 2002
++
++dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
++
+diff --git a/tests/test33-schema-modify-entry/before.sh b/tests/test33-schema-modify-entry/before.sh
+new file mode 100755
+index 0000000..151dcab
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/before.sh
+@@ -0,0 +1,2 @@
++#!/bin/sh
++search -b cn=compat,cn=accounts,dc=example,dc=com dn gidNumber | $LDIFSORT
+diff --git a/tests/test33-schema-modify-entry/before.txt b/tests/test33-schema-modify-entry/before.txt
+new file mode 100644
+index 0000000..238e3a8
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/before.txt
+@@ -0,0 +1,4 @@
++dn: cn=compat,cn=accounts,dc=example,dc=com
++
++dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
++
+diff --git a/tests/test33-schema-modify-entry/change.sh b/tests/test33-schema-modify-entry/change.sh
+new file mode 100755
+index 0000000..105beaa
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/change.sh
+@@ -0,0 +1,11 @@
++#!/bin/sh
++modify << EOF
++dn: cn=g2,cn=groups,cn=accounts,dc=example,dc=com
++changetype: modify
++replace: gidNumber
++gidNumber: 2002
++-
++
++EOF
++# give memberOf a few seconds to catch up
++sleep 10
+diff --git a/tests/test33-schema-modify-entry/change.txt b/tests/test33-schema-modify-entry/change.txt
+new file mode 100644
+index 0000000..f8ae3a0
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/change.txt
+@@ -0,0 +1,2 @@
++modifying entry "cn=g2,cn=groups,cn=accounts,dc=example,dc=com"
++
+diff --git a/tests/test33-schema-modify-entry/description.txt b/tests/test33-schema-modify-entry/description.txt
+new file mode 100644
+index 0000000..ebcb8cb
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/description.txt
+@@ -0,0 +1 @@
++not skipping changes that impact filtering
+diff --git a/tests/test33-schema-modify-entry/dse.ldif b/tests/test33-schema-modify-entry/dse.ldif
+new file mode 100644
+index 0000000..e677bf0
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/dse.ldif
+@@ -0,0 +1,15 @@
++dn: cn=compat-group,cn=Schema Compatibility,cn=plugins,cn=config
++objectClass: top
++objectClass: extensibleObject
++cn: compat-group
++schema-compat-container-group: cn=compat,cn=accounts,dc=example,dc=com
++schema-compat-container-rdn: ou=group
++schema-compat-check-access: yes
++schema-compat-search-base: cn=groups,cn=Accounts,dc=example,dc=com
++schema-compat-search-base: cn=managed-groups,cn=Accounts,dc=example,dc=com
++schema-compat-search-filter: (&(objectClass=posixGroup)(gidNumber>=1500))
++schema-compat-entry-rdn: cn=%{cn}
++schema-compat-entry-attribute: objectclass=extensibleObject
++schema-compat-entry-attribute: memberUid=%deref_r("member","uid")
++schema-compat-entry-attribute: gidNumber=%{gidNumber}
++
+diff --git a/tests/test33-schema-modify-entry/plugin-process-all.txt b/tests/test33-schema-modify-entry/plugin-process-all.txt
+new file mode 100644
+index 0000000..fc7b80d
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/plugin-process-all.txt
+@@ -0,0 +1 @@
++verifying that we get called
+diff --git a/tests/test33-schema-modify-entry/userRoot.ldif b/tests/test33-schema-modify-entry/userRoot.ldif
+new file mode 100644
+index 0000000..b428a8a
+--- /dev/null
++++ b/tests/test33-schema-modify-entry/userRoot.ldif
+@@ -0,0 +1,86 @@
++# users, accounts, example.com
++dn: cn=users,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: nsContainer
++cn: users
++
++# groups, accounts, example.com
++dn: cn=groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: nsContainer
++cn: groups
++
++# managed-groups, accounts, example.com
++dn: cn=managed-groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: nsContainer
++cn: groups
++
++# tuser1, users, accounts, example.com
++dn: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
++uid: tuser1
++objectClass: top
++objectClass: person
++objectClass: posixAccount
++objectClass: inetUser
++loginShell: /bin/sh
++gidNumber: 1003
++gecos: tuser1
++sn: User
++homeDirectory: /home/tuser1
++cn: Tim User
++uidNumber: 1101
++
++# tuser2, users, accounts, example.com
++dn: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
++uid: tuser2
++objectClass: top
++objectClass: person
++objectClass: posixAccount
++objectClass: inetUser
++loginShell: /bin/sh
++gidNumber: 1004
++gecos: tuser2
++sn: User
++homeDirectory: /home/tuser2
++cn: Timmy User
++uidNumber: 1102
++
++# tuser3, users, accounts, example.com
++dn: uid=tuser3,cn=users,cn=accounts,dc=example,dc=com
++uid: tuser3
++objectClass: top
++objectClass: person
++objectClass: posixAccount
++objectClass: inetUser
++loginShell: /bin/sh
++gidNumber: 1004
++gecos: tuser3
++sn: User
++homeDirectory: /home/tuser3
++cn: Timothy User
++uidNumber: 1103
++
++# g1, groups, accounts, example.com
++dn: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: groupofnames
++objectClass: posixGroup
++objectClass: inetUser
++gidNumber: 1001
++cn: g1
++description: g1
++member: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
++
++# g2, groups, accounts, example.com
++dn: cn=g2,cn=groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: groupofnames
++objectClass: posixGroup
++objectClass: inetUser
++gidNumber: 1002
++cn: g2
++description: g2
++member: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
++member: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
++
+diff --git a/tests/test34-schema-modify-entry/after.sh b/tests/test34-schema-modify-entry/after.sh
+new file mode 100755
+index 0000000..151dcab
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/after.sh
+@@ -0,0 +1,2 @@
++#!/bin/sh
++search -b cn=compat,cn=accounts,dc=example,dc=com dn gidNumber | $LDIFSORT
+diff --git a/tests/test34-schema-modify-entry/after.txt b/tests/test34-schema-modify-entry/after.txt
+new file mode 100644
+index 0000000..238e3a8
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/after.txt
+@@ -0,0 +1,4 @@
++dn: cn=compat,cn=accounts,dc=example,dc=com
++
++dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
++
+diff --git a/tests/test34-schema-modify-entry/before.sh b/tests/test34-schema-modify-entry/before.sh
+new file mode 100755
+index 0000000..151dcab
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/before.sh
+@@ -0,0 +1,2 @@
++#!/bin/sh
++search -b cn=compat,cn=accounts,dc=example,dc=com dn gidNumber | $LDIFSORT
+diff --git a/tests/test34-schema-modify-entry/before.txt b/tests/test34-schema-modify-entry/before.txt
+new file mode 100644
+index 0000000..9c92512
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/before.txt
+@@ -0,0 +1,7 @@
++dn: cn=compat,cn=accounts,dc=example,dc=com
++
++dn: cn=g2,ou=group,cn=compat,cn=accounts,dc=example,dc=com
++gidNumber: 2002
++
++dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
++
+diff --git a/tests/test34-schema-modify-entry/change.sh b/tests/test34-schema-modify-entry/change.sh
+new file mode 100755
+index 0000000..d371b67
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/change.sh
+@@ -0,0 +1,11 @@
++#!/bin/sh
++modify << EOF
++dn: cn=g2,cn=groups,cn=accounts,dc=example,dc=com
++changetype: modify
++replace: gidNumber
++gidNumber: 1002
++-
++
++EOF
++# give memberOf a few seconds to catch up
++sleep 10
+diff --git a/tests/test34-schema-modify-entry/change.txt b/tests/test34-schema-modify-entry/change.txt
+new file mode 100644
+index 0000000..f8ae3a0
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/change.txt
+@@ -0,0 +1,2 @@
++modifying entry "cn=g2,cn=groups,cn=accounts,dc=example,dc=com"
++
+diff --git a/tests/test34-schema-modify-entry/description.txt b/tests/test34-schema-modify-entry/description.txt
+new file mode 100644
+index 0000000..ebcb8cb
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/description.txt
+@@ -0,0 +1 @@
++not skipping changes that impact filtering
+diff --git a/tests/test34-schema-modify-entry/dse.ldif b/tests/test34-schema-modify-entry/dse.ldif
+new file mode 100644
+index 0000000..e677bf0
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/dse.ldif
+@@ -0,0 +1,15 @@
++dn: cn=compat-group,cn=Schema Compatibility,cn=plugins,cn=config
++objectClass: top
++objectClass: extensibleObject
++cn: compat-group
++schema-compat-container-group: cn=compat,cn=accounts,dc=example,dc=com
++schema-compat-container-rdn: ou=group
++schema-compat-check-access: yes
++schema-compat-search-base: cn=groups,cn=Accounts,dc=example,dc=com
++schema-compat-search-base: cn=managed-groups,cn=Accounts,dc=example,dc=com
++schema-compat-search-filter: (&(objectClass=posixGroup)(gidNumber>=1500))
++schema-compat-entry-rdn: cn=%{cn}
++schema-compat-entry-attribute: objectclass=extensibleObject
++schema-compat-entry-attribute: memberUid=%deref_r("member","uid")
++schema-compat-entry-attribute: gidNumber=%{gidNumber}
++
+diff --git a/tests/test34-schema-modify-entry/plugin-process-all.txt b/tests/test34-schema-modify-entry/plugin-process-all.txt
+new file mode 100644
+index 0000000..fc7b80d
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/plugin-process-all.txt
+@@ -0,0 +1 @@
++verifying that we get called
+diff --git a/tests/test34-schema-modify-entry/userRoot.ldif b/tests/test34-schema-modify-entry/userRoot.ldif
+new file mode 100644
+index 0000000..69414a8
+--- /dev/null
++++ b/tests/test34-schema-modify-entry/userRoot.ldif
+@@ -0,0 +1,86 @@
++# users, accounts, example.com
++dn: cn=users,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: nsContainer
++cn: users
++
++# groups, accounts, example.com
++dn: cn=groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: nsContainer
++cn: groups
++
++# managed-groups, accounts, example.com
++dn: cn=managed-groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: nsContainer
++cn: groups
++
++# tuser1, users, accounts, example.com
++dn: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
++uid: tuser1
++objectClass: top
++objectClass: person
++objectClass: posixAccount
++objectClass: inetUser
++loginShell: /bin/sh
++gidNumber: 1003
++gecos: tuser1
++sn: User
++homeDirectory: /home/tuser1
++cn: Tim User
++uidNumber: 1101
++
++# tuser2, users, accounts, example.com
++dn: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
++uid: tuser2
++objectClass: top
++objectClass: person
++objectClass: posixAccount
++objectClass: inetUser
++loginShell: /bin/sh
++gidNumber: 1004
++gecos: tuser2
++sn: User
++homeDirectory: /home/tuser2
++cn: Timmy User
++uidNumber: 1102
++
++# tuser3, users, accounts, example.com
++dn: uid=tuser3,cn=users,cn=accounts,dc=example,dc=com
++uid: tuser3
++objectClass: top
++objectClass: person
++objectClass: posixAccount
++objectClass: inetUser
++loginShell: /bin/sh
++gidNumber: 1004
++gecos: tuser3
++sn: User
++homeDirectory: /home/tuser3
++cn: Timothy User
++uidNumber: 1103
++
++# g1, groups, accounts, example.com
++dn: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: groupofnames
++objectClass: posixGroup
++objectClass: inetUser
++gidNumber: 1001
++cn: g1
++description: g1
++member: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
++
++# g2, groups, accounts, example.com
++dn: cn=g2,cn=groups,cn=accounts,dc=example,dc=com
++objectClass: top
++objectClass: groupofnames
++objectClass: posixGroup
++objectClass: inetUser
++gidNumber: 2002
++cn: g2
++description: g2
++member: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
++member: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
++

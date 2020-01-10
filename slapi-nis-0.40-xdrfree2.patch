@@ -1,0 +1,11 @@
+diff -up slapi-nis-0.47.7/src/nis.c.more slapi-nis-0.47.7/src/nis.c
+--- slapi-nis-0.47.7/src/nis.c.more	2013-12-09 16:43:11.990738659 -0500
++++ slapi-nis-0.47.7/src/nis.c	2013-12-09 16:43:08.263707346 -0500
+@@ -873,6 +873,7 @@ nis_all(struct plugin_state *state,
+ 			}
+ 		}
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_ypreq_nokey, &req_nokey);
+ 		/* Return the cookie if we can, else destroy it. */
+ 		if (continuation_cookie) {
+ 			*continuation_cookie = cookie;
