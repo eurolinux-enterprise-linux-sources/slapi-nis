@@ -6,7 +6,7 @@
 
 Name:		slapi-nis
 Version:	0.40
-Release:	3%{?dist}
+Release:	4%{?dist}
 Summary:	NIS Server and Schema Compatibility plugins for Directory Server
 Group:		System Environment/Daemons
 License:	GPLv2
@@ -15,6 +15,8 @@ Source0:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.ta
 Source1:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz.sig
 Patch0:		slapi-nis-0.40-leak.patch
 Patch1:		slapi-nis-0.40-notxns.patch
+Patch2:		slapi-nis-0.40-xdrfree.patch
+Patch3:		slapi-nis-0.40-multiplex.patch
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:	389-ds-base-devel >= 1.2.10, %{ldap_impl}-devel
 BuildRequires:	autoconf, automake, libtool
@@ -49,6 +51,8 @@ for attributes from multiple entries in the tree.
 %setup -q
 %patch0 -p1 -b .leak
 %patch1 -p1 -b .notxns
+%patch2 -p1 -b .xdrfree
+%patch3 -p1 -b .multiplex
 autoreconf -f -i
 
 %build
@@ -77,6 +81,11 @@ rm -rf $RPM_BUILD_ROOT
 %{_sbindir}/nisserver-plugin-defs
 
 %changelog
+* Thu Jul 25 2013 Nalin Dahyabhai <nalin@redhat.com> - 0.40-4
+- backport fix for request argument memory leaks in NIS server (#967468)
+- backport fix for dispatching for multiple connected clients in the NIS
+  plugin (#923336)
+
 * Fri Aug 24 2012 Nalin Dahyabhai <nalin@redhat.com> - 0.40-3
 - backport fix for a slow memory leak (#840926)
 - tweak configure to disable explicit (wrong) transaction support (#829502)

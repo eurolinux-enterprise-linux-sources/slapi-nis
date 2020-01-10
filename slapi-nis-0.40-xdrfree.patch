@@ -1,0 +1,77 @@
+commit 41c4bc8377c4656a985466de57d97eb026895a8c
+Author: Nalin Dahyabhai <nalin@redhat.com>
+Date:   Thu May 23 14:37:07 2013 -0400
+
+    Don't leak decoded XDR memory
+    
+    After we're done with decoded arguments from a client, use xdr_free() to
+    free anything that was dynamically-allocated.
+
+diff --git a/src/nis.c b/src/nis.c
+index 2521ac5..239a08b 100644
+--- a/src/nis.c
++++ b/src/nis.c
+@@ -78,6 +78,7 @@ nis_domain(struct plugin_state *state,
+ 					domain, *reply_bool ? "TRUE" : "FALSE");
+ 		}
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_string, &domain);
+ 	} else {
+ 		slapi_log_error(SLAPI_LOG_PLUGIN,
+ 				state->plugin_desc->spd_id,
+@@ -132,6 +133,7 @@ nis_match(struct plugin_state *state,
+ 		}
+ 		(*reply_fn)(state, cdata, reply, reply_xdrs);
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_ypreq_key, &req_key);
+ 	} else {
+ 		/* XXX */
+ 	}
+@@ -184,6 +186,7 @@ nis_first(struct plugin_state *state,
+ 		}
+ 		(*reply_fn)(state, cdata, reply, reply_xdrs);
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_ypreq_nokey, &req_nokey);
+ 	} else {
+ 		/* XXX */
+ 	}
+@@ -262,6 +265,7 @@ nis_next(struct plugin_state *state,
+ 		}
+ 		(*reply_fn)(state, cdata, reply, reply_xdrs);
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_ypreq_key, &req_key);
+ 	} else {
+ 		/* XXX */
+ 	}
+@@ -322,6 +326,7 @@ nis_master(struct plugin_state *state,
+ 		}
+ 		(*reply_fn)(state, cdata, reply, reply_xdrs);
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_ypreq_nokey, &req_nokey);
+ 	} else {
+ 		/* XXX */
+ 	}
+@@ -364,6 +369,7 @@ nis_order(struct plugin_state *state,
+ 		}
+ 		(*reply_fn)(state, cdata, reply, reply_xdrs);
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_ypreq_nokey, &req_nokey);
+ 	} else {
+ 		/* XXX */
+ 	}
+@@ -447,6 +453,7 @@ nis_maplist(struct plugin_state *state,
+ 		(*reply_fn)(state, cdata, reply, reply_xdrs);
+ 		nis_free_maplist_cb_result(&cbdata);
+ 		map_unlock();
++		xdr_free((xdrproc_t)xdr_string, &domain);
+ 	} else {
+ 		/* XXX */
+ 	}
+@@ -1171,6 +1178,7 @@ sent_reply:
+ 	xdr_destroy(&reply_xdrs);
+ 
+ done:
++	xdr_free((xdrproc_t)xdr_callmsg, &request);
+ 	xdr_destroy(&request_xdrs);
+ 	return;
+ }

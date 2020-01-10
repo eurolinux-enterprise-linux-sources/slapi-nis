@@ -1,0 +1,57 @@
+commit e722b5ffae2ad433df2b7425b07c62bab0cd1dbf
+Author: Nalin Dahyabhai <nalin@redhat.com>
+Date:   Tue Mar 19 13:28:17 2013 -0400
+
+    Fix multiplexing of multiple clients
+    
+    Don't expect every connected client to be ready for I/O every time we
+    poll for the group of them.  Fixes #923336.
+
+diff --git a/src/disp-nis.c b/src/disp-nis.c
+index 2a64f43..a5716fe 100644
+--- a/src/disp-nis.c
++++ b/src/disp-nis.c
+@@ -679,7 +679,10 @@ client_read(struct plugin_state *state, struct dispatch_client *client)
+ 		     client->client_inbuf + client->client_inbuf_used,
+ 		     sizeof(client->client_inbuf) - client->client_inbuf_used);
+ 	if (count <= 0) {
+-		if ((count != -1) || (errno != EAGAIN)) {
++		if ((count != -1) ||
++		    ((errno != EAGAIN) &&
++		     (errno != EWOULDBLOCK) &&
++		     (errno != EINTR))) {
+ 			/* Disconnect the client. */
+ 			if (count == 0) {
+ 				slapi_log_error(SLAPI_LOG_PLUGIN,
+@@ -800,7 +803,10 @@ client_write(struct plugin_state *state, struct dispatch_client *client)
+ 			len, client->client_fd);
+ 	count = write(client->client_fd, client->client_outbuf, len);
+ 	if (count <= 0) {
+-		if ((count != -1) || (errno != EAGAIN)) {
++		if ((count != -1) ||
++		    ((errno != EAGAIN) &&
++		     (errno != EWOULDBLOCK) &&
++		     (errno != EINTR))) {
+ 			slapi_log_error(SLAPI_LOG_PLUGIN,
+ 					state->plugin_desc->spd_id,
+ 					"error sending %ld bytes to %d\n",
+@@ -867,8 +873,6 @@ dispatch_service_client(struct plugin_state *state,
+ 	case client_reading:
+ 		if (fd->revents & POLLIN) {
+ 			client_read(state, client);
+-		} else {
+-			client_set_closing(state, client);
+ 		}
+ 		break;
+ 	case client_replying_with_more:
+@@ -876,7 +880,9 @@ dispatch_service_client(struct plugin_state *state,
+ 		if (fd->revents & POLLOUT) {
+ 			client_write(state, client);
+ 		} else {
+-			client_set_closing(state, client);
++			if (fd->revents & (POLLERR | POLLHUP)) {
++				client_set_closing(state, client);
++			}
+ 		}
+ 		break;
+ 	case client_closing:
