@@ -1,0 +1,340 @@
+From bcdcb8e762c6a8824ff1dd67f7e068ef519b3952 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Mon, 11 Sep 2017 15:33:24 +0300
+Subject: [PATCH 13/17] track changes to ID overrides and evict map cache
+ entries
+
+Plug into a processing of LDAP add/delete/modify to see if an ID override entry
+was added/deleted/updated. ID overrides aren't directly used to produce
+map cache entries but when AD user or group is resolved, SSSD on IPA
+master amends that information with ID Override from a Default Trust
+View. Since nothing else would remove AD user or group entry from the map cache
+on ID override change, handle their removal here.
+
+Check if we have any nssswitch-generated entry in a map cache that
+corresponds to this entry. Such entries would be evicted from the map
+cache to allow their refresh.
+
+Allow backends to inspect entries related to a map set
+
+Entries may be related to a map set content but not used directly to
+generate it. An example would be ID overrides in FreeIPA. An addition,
+removal or change of an ID override in the Default Trust View should be
+reflected by evicting an entry from the corresponding seti.
+
+Let backends to handle exact logic. NIS backend does not support
+exposing AD users so it provides set of dummy callbacks that always
+return FALSE (entry is not related). Schema Compat backend, on other
+hand, does track ID overrides in a Default Trust View in FreeIPA.
+---
+ src/back-sch.c | 176 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/back-shr.c |  55 ++++++++++++++----
+ src/backend.h  |  20 +++++++
+ 3 files changed, 239 insertions(+), 12 deletions(-)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index e15988f..f98b0b4 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -33,6 +33,7 @@
+ #ifdef HAVE_DIRSRV_SLAPI_PLUGIN_H
+ #include <nspr.h>
+ #include <plhash.h>
++#include <plstr.h>
+ #include <nss.h>
+ #include <dirsrv/slapi-plugin.h>
+ #else
+@@ -2099,6 +2100,181 @@ backend_write_cb(Slapi_PBlock *pb, struct plugin_state *state)
+ 	return ret;
+ }
+ 
++#ifdef USE_IPA_IDVIEWS
++/* Check if ID override applies to an entry in our map cache
++ * and remove the entry in case it does. */
++
++static bool_t
++backend__get_original_uid_and_ndn(Slapi_Entry *e,
++				  char **original_uid,
++				  const char **original_anchor)
++{
++	char **elem = NULL;
++	char *v = NULL;
++	char *ndn = NULL;
++	char *view = NULL;
++	int n_elem = 0;
++	int i = 0;
++
++	if (e == NULL) {
++		return FALSE;
++	}
++
++	elem = slapi_entry_attr_get_charray_ext(e, "objectClass", &n_elem);
++	if (elem == NULL) {
++		/* weird, objectClass should be existing */
++		return FALSE;
++	}
++
++	for (i=0; i < n_elem; i++) {
++		if (strncasecmp(elem[i], "ipaOverrideAnchor", 17) == 0) {
++			break;
++		}
++	}
++
++	slapi_ch_array_free(elem);
++	if (i == n_elem) {
++		/* This is not an override, bail out */
++		return FALSE;
++	}
++
++	ndn = slapi_entry_get_ndn(e);
++	if (ndn == NULL) {
++		return FALSE;
++	}
++
++	view = PL_strcasestr(ndn, "cn=Default Trust View,");
++	if (view == NULL || view == ndn) {
++		return FALSE;
++	}
++
++	/* This is an ID override, we need to search for a referenced ipaOriginalUid or cn in our maps */
++	v = slapi_entry_attr_get_charptr(e, "ipaOriginalUid");
++	if (v == NULL) {
++		v = slapi_entry_attr_get_charptr(e, "cn");
++		if (v == NULL) {
++			return FALSE;
++		}
++	}
++
++	*original_uid = v;
++	*original_anchor = ndn;
++	return TRUE;
++}
++
++bool_t
++backend_entry_evict_if_related(const char *group, const char *set, bool_t flag,
++			       void *shared_set_data,
++			       Slapi_PBlock *pb,
++			       Slapi_Entry *e)
++{
++	struct backend_set_data *set_data;
++	struct plugin_state *state = NULL;
++	char *id = NULL;
++	char *original_uid = NULL;
++	const char *original_anchor = NULL;
++	const char *rdn_attribute[] = {NULL, "uid=%s,%s,%s", "cn=%s,%s,%s"};
++	bool_t result = FALSE;
++
++	set_data = shared_set_data;
++
++	/* We only interested in NSSWITCH-capable maps */
++	if (set_data->check_nsswitch == SCH_NSSWITCH_NONE) {
++		return FALSE;
++	}
++
++	/* See if the entry pre modification had original UID */
++	if (!backend__get_original_uid_and_ndn(e,
++					       &original_uid,
++					       &original_anchor)) {
++		return FALSE;
++	}
++
++	id = slapi_ch_smprintf(rdn_attribute[set_data->check_nsswitch],
++			       original_uid, set, group);
++
++	if (id == NULL) {
++		slapi_ch_free_string(&original_uid);
++		return FALSE;
++	}
++
++	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
++	result = map_data_check_entry(state, group, set, id);
++	if (result) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"evicted entry %s due to changed content of ID override %s\n",
++				id, original_anchor);
++
++		/* An entry corresponding to our target is found, evict it */
++		map_data_unset_entry(state, group, set, id);
++	}
++
++	slapi_ch_free_string(&id);
++	slapi_ch_free_string(&original_uid);
++	return result;
++}
++
++bool_t
++backend_entry_is_add_related(const char *group, const char *set, bool_t flag,
++			     void *shared_set_data,
++			     Slapi_PBlock *pb,
++			     Slapi_Entry *e)
++{
++	return backend_entry_evict_if_related(group, set, flag, shared_set_data, pb, e);
++}
++
++
++bool_t
++backend_entry_is_modify_related(const char *group, const char *set, bool_t flag,
++				void *shared_set_data,
++				Slapi_PBlock *pb,
++				Slapi_Entry *e_pre,
++				Slapi_Entry *e_post)
++{
++	return backend_entry_evict_if_related(group, set, flag, shared_set_data, pb, e_pre);
++}
++
++bool_t
++backend_entry_is_delete_related(const char *group, const char *set, bool_t flag,
++				void *shared_set_data,
++				Slapi_PBlock *pb,
++				Slapi_Entry *e)
++{
++	return backend_entry_evict_if_related(group, set, flag, shared_set_data, pb, e);
++}
++
++#else
++
++bool_t
++backend_entry_is_add_related(const char *group, const char *set, bool_t flag,
++			     void *shared_set_data,
++			     Slapi_PBlock *pb,
++			     Slapi_Entry *e)
++{
++	return FALSE;
++}
++
++bool_t
++backend_entry_is_modify_related(const char *group, const char *set, bool_t flag,
++				void *shared_set_data,
++				Slapi_PBlock *pb,
++				Slapi_Entry *e_pre,
++				Slapi_Entry *e_post)
++{
++	return FALSE;
++}
++
++bool_t
++backend_entry_is_delete_related(const char *group, const char *set, bool_t flag,
++				void *shared_set_data,
++				Slapi_PBlock *pb,
++				Slapi_Entry *e)
++{
++	return FALSE;
++}
++
++#endif
++
+ static int
+ backend_pre_write_cb(Slapi_PBlock *pb)
+ {
+diff --git a/src/back-shr.c b/src/back-shr.c
+index 7842e05..a7ea92f 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -1856,11 +1856,21 @@ backend_shr_add_entry_cb(const char *group, const char *set, bool_t secure,
+ 
+ 	/* If the entry doesn't match the set, skip it. */
+ 	if (!backend_shr_entry_matches_set(set_data, cbdata->pb, cbdata->e)) {
+-		slapi_log_error(SLAPI_LOG_PLUGIN,
+-				cbdata->state->plugin_desc->spd_id,
+-				"entry \"%s\" does not belong in "
+-				"\"%s\"/\"%s\"\n",
+-				cbdata->ndn, group, set);
++		/* Give backend a chance to perform other operations on the add op.
++		 * For example, ID override addition in FreeIPA need to be noted to
++		 * evict AD user/group entries from a map cache while ID overrides
++		 * themselves aren't present in any map.
++		 * Note that we could do this as a part of backend_shr_entry_matches_set()
++		 * but it is better to isolate this operation in a separate call. */
++		if (!backend_entry_is_add_related(group, set, secure,
++						  set_data, cbdata->pb,
++						  cbdata->e)) {
++			slapi_log_error(SLAPI_LOG_PLUGIN,
++					cbdata->state->plugin_desc->spd_id,
++					"entry \"%s\" does not belong in "
++					"\"%s\"/\"%s\"\n",
++					cbdata->ndn, group, set);
++		}
+ 		return TRUE;
+ 	}
+ 
+@@ -2010,13 +2020,24 @@ backend_shr_modify_entry_cb(const char *group, const char *set, bool_t flag,
+ 					   cbdata->e_post) &&
+ 	    !backend_shr_entry_matches_set(set_data, cbdata->pb,
+ 					   cbdata->e_pre)) {
+-		slapi_log_error(SLAPI_LOG_PLUGIN,
+-				cbdata->state->plugin_desc->spd_id,
+-				"\"%s\" not in \"%s\"/\"%s\", "
+-				"before or after modify\n",
+-				cbdata->ndn,
+-				set_data->group,
+-				set_data->set);
++		/* Give backend a chance to perform other operations on the modify op.
++		 * For example, ID override updates in FreeIPA need to be noted to
++		 * evict AD user/group entries from a map cache while ID overrides
++		 * themselves aren't present in any map.
++		 * Note that we could do this as a part of backend_shr_entry_matches_set()
++		 * but it is better to isolate this operation in a separate call. */
++		if (!backend_entry_is_modify_related(group, set, flag,
++						     set_data, cbdata->pb,
++						     cbdata->e_pre,
++						     cbdata->e_post)) {
++			slapi_log_error(SLAPI_LOG_PLUGIN,
++					cbdata->state->plugin_desc->spd_id,
++					"\"%s\" not in \"%s\"/\"%s\", "
++					"before or after modify\n",
++					cbdata->ndn,
++					set_data->group,
++					set_data->set);
++		}
+ 		return TRUE;
+ 	}
+ 	if (set_data->skip_uninteresting_updates &&
+@@ -2631,6 +2652,16 @@ backend_shr_delete_entry_cb(const char *group, const char *set, bool_t flag,
+ 				group, set, set_data->group, set_data->set,
+ 				cbdata->ndn);
+ 		map_data_unset_entry(cbdata->state, group, set, cbdata->ndn);
++	} else {
++		/* Give backend a chance to perform other operations on the delete op.
++		 * For example, ID override removal in FreeIPA need to be noted to
++		 * evict AD user/group entries from a map cache while ID overrides
++		 * themselves aren't present in any map.
++		 * Note that we could do this as a part of backend_shr_entry_matches_set()
++		 * but it is better to isolate this operation in a separate call. */
++		(void) backend_entry_is_delete_related(group, set, flag,
++						       set_data, cbdata->pb,
++						       cbdata->e);
+ 	}
+ 	return TRUE;
+ }
+diff --git a/src/backend.h b/src/backend.h
+index 4608d2d..f0a5bbb 100644
+--- a/src/backend.h
++++ b/src/backend.h
+@@ -115,4 +115,24 @@ void backend_update_params(Slapi_PBlock *pb, struct plugin_state *state);
+ bool_t backend_shr_is_caller(struct plugin_state *state,
+ 			     struct slapi_pblock *pb);
+ 
++/* Check if an operation is performed on an entry that is related to
++ * any entry in the set. This allows to catch changes of the entries that
++ * aren't directly included in the map set but should affect the set. */
++bool_t
++backend_entry_is_modify_related(const char *group, const char *set, bool_t flag,
++				void *shared_set_data,
++				Slapi_PBlock *pb,
++				Slapi_Entry *e_pre,
++				Slapi_Entry *e_post);
++bool_t
++backend_entry_is_add_related(const char *group, const char *set, bool_t flag,
++			     void *shared_set_data,
++			     Slapi_PBlock *pb,
++			     Slapi_Entry *e);
++bool_t
++backend_entry_is_delete_related(const char *group, const char *set, bool_t flag,
++				void *shared_set_data,
++				Slapi_PBlock *pb,
++				Slapi_Entry *e);
++
+ #endif
+-- 
+2.13.6
+
