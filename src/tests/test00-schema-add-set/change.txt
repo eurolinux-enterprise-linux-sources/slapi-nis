@@ -1,0 +1,2 @@
+adding new entry "cn=compat-passwd,cn=Schema Compatibility,cn=plugins,cn=config"
+

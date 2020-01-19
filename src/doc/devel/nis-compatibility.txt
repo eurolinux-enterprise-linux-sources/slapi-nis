@@ -1,0 +1,77 @@
+NIS itself consists of approximately a dozen RPC functions.  In RPC
+parlance, the yppasswd protocol, which provides a means of remotely
+changing passwords and GECOS information, is a wholly different
+protocol, and no attempt has been made to implement any part of it in
+this plugin.  The rationale for this is that browser-based self-service
+solutions for this problem are assumed to be plentiful, and as the
+yppasswd protocol doesn't encrypt passwords when they're sent over the
+network, it's best avoided if possible.
+
+Getting back to NIS, the protocol consists of several remote procedure
+call interfaces which a server is expected to provide, and compatibility
+can most simply be described by noting differences between this
+implementation and typical NIS server implementations.
+
+YPPROC_NULL
+  This function doesn't actually do anything.  Fully implemented.
+
+YPPROC_DOMAIN
+YPPROC_DOMAIN_NONACK
+  These functions are used by a client's ypbind daemon to verify that a
+  particular server contains maps for a given domain.  Fully implemented.
+
+YPPROC_MATCH
+  This function searches for one entry in a map, and is typically what
+  the "ypmatch" command-line utility uses.  Fully implemented.
+
+YPPROC_FIRST
+  This function retrieves the first entry in a map.  Fully implemented.
+
+YPPROC_NEXT
+  This function retrieves the entry in a map which immediately follows
+  another, specified, entry in the map.  The combination of YPPROC_FIRST
+  and YPPROC_NEXT provides one mechanism for clients to walk the entire
+  set of entries in a map.  If a single key occurs more than once in a
+  map, however, a client will either "skip over" entries which are
+  between instances of that key or may become stuck endlessly traversing
+  that same set of entries.
+ 
+  While typical NIS servers have a defined order for entries in maps
+  (that order usually being the same as the ordering used in the files
+  which were used to generate the maps), a directory server does not
+  define such an order, so while this function can still be used to
+  retrieve all of the entries in a map, no guarantee can be made with
+  respect to the order in which those entries will be found.
+
+YPPROC_ALL
+  This function retrieves all of the entries in a map, and is typically
+  what the "ypcat" command-line utility uses.  Fully implemented.
+
+YPPROC_MASTER
+  This function retrieves the name of the NIS server which is the master
+  (in replication scenarios) for a specified map.  Because replication
+  of data is handled at the directory server level, this function is a
+  no-op.
+
+YPPROC_CLEAR
+  This function typically instructs a NIS server to close and reopen the
+  file from which it is reading the contents of a map.  Because the
+  plugin updates its maps at the same time the data on which those maps
+  depend is modified, this function is a no-op.
+
+YPPROC_XFR
+  This function typically instructs a NIS server to re-fetch a map from
+  the server which is the master for the map.  Because replication of
+  data is handled at the directory server level, this function is a
+  no-op.
+
+YPPROC_ORDER
+  This function retrieves the time that a specified map was last
+  modified, typically used by a replica NIS server to determine when it
+  needs to fetch an updated set of map entries.  Fully implemented.
+
+YPPROC_MAPLIST
+  This function retrieves the list of maps defined for the specified
+  domain.  While there is no typical command-line utility which fetches
+  this information, the source tree includes a python script which calls
+  this function and prints its results.  Fully implemented.

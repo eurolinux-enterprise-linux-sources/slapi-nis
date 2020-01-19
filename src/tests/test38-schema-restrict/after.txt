@@ -1,0 +1,20 @@
+[updated]
+dn: cn=NIS Server,cn=plugins,cn=config
+
+dn: nis-domain=example.com+nis-map=mac2name,cn=NIS Server,cn=plugins,cn=config
+nis-domain: example.com
+nis-map: mac2name
+
+dn: nis-domain=example.com+nis-map=name2mac,cn=NIS Server,cn=plugins,cn=config
+nis-domain: example.com
+nis-map: name2mac
+nis-map: name2mac2
+
+[result]
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+dn: cn=g2,ou=group,cn=compat,cn=accounts,dc=example,dc=com
+gidNumber: 2002
+
+dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
+

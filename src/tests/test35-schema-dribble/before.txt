@@ -1,0 +1,20 @@
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+dn: cn=g1,ou=group,cn=compat,cn=accounts,dc=example,dc=com
+memberUids: tuser15,tuser16,tuser17,tuser18,tuser19,tuser90,tuser91,tuser92,tu
+ ser93,tuser94,tuser95,tuser96,tuser97,tuser98,tuser99
+
+dn: cn=g2,ou=group,cn=compat,cn=accounts,dc=example,dc=com
+memberUids: tuser10,tuser11,tuser12,tuser13,tuser14,tuser20,tuser21,tuser22,tu
+ ser23,tuser24,tuser25,tuser26,tuser27,tuser28,tuser29,tuser30
+memberUids: tuser31,tuser32,tuser33,tuser34,tuser35,tuser36,tuser37,tuser38,tu
+ ser39,tuser40,tuser41,tuser42,tuser43,tuser44,tuser45,tuser46
+memberUids: tuser47,tuser48,tuser49,tuser50,tuser51,tuser52,tuser53,tuser54,tu
+ ser55,tuser56,tuser57,tuser58,tuser59,tuser60,tuser61,tuser62
+memberUids: tuser63,tuser64,tuser65,tuser66,tuser67,tuser68,tuser69,tuser70,tu
+ ser71,tuser72,tuser73,tuser74,tuser75,tuser76,tuser77,tuser78
+memberUids: tuser79,tuser80,tuser81,tuser82,tuser83,tuser84,tuser85,tuser86,tu
+ ser87,tuser88,tuser89
+
+dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
+

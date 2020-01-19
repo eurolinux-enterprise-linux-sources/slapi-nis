@@ -1,0 +1,27 @@
+map list:
+services.byname
+services.byservicename
+services.byname
+services.byservicename
+contents of example.com:services.byname:
+23/tcp	telnet 23/tcp telnet
+23/udp	telnet 23/udp telnet
+636/tcp	ldap-ssl 636/tcp ldaps ldap-ssl
+636/udp	ldap-ssl 636/udp ldaps ldap-ssl
+80/tcp	http 80/tcp http www
+80/udp	http 80/udp http www
+992/tcp	telnets 992/tcp telnets
+992/udp	telnets 992/udp telnets
+contents of example.com:services.byservicename:
+http/tcp	http 80/tcp http www
+http/udp	http 80/udp http www
+ldap-ssl/tcp	ldap-ssl 636/tcp ldaps ldap-ssl
+ldap-ssl/udp	ldap-ssl 636/udp ldaps ldap-ssl
+ldaps/tcp	ldaps 636/tcp ldaps ldap-ssl
+ldaps/udp	ldaps 636/udp ldaps ldap-ssl
+telnet/tcp	telnet 23/tcp telnet
+telnet/udp	telnet 23/udp telnet
+telnets/tcp	telnets 992/tcp telnets
+telnets/udp	telnets 992/udp telnets
+www/tcp	www 80/tcp http www
+www/udp	www 80/udp http www

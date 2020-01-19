@@ -1,0 +1,89 @@
+=== Migration ===
+
+There are a number of well-known maps which a typical NIS deployment
+includes, and for most of these, there's typically just one schema which
+is used to represent that sort of information in the directory.
+
+Map						Object Class
+-----------------------------------------------	-------------
+passwd.byname,passwd.byuid			posixAccount
+group.byname,group.bygid			posixGroup
+netgroup,netgroup.byhost,netgroup.byuser [1]	nisNetgroup
+services.byname,services.byservicename		ipService
+networks.byaddr,networks.byname			ipNetwork
+protocols.byname,protocols.bynumber		ipProtocol
+hosts.byname,hosts.byaddr			ipHost
+rpc.byname,rpc.bynumber				oncRpc
+ethers.byname,ethers.byaddr			ieee802Device
+netid						(none) [2]
+publickey.byname				(none) [3]
+mail.aliases					(none) [3]
+timezone.byname					(none) [3]
+locale.byname					(none) [3]
+netmasks.byaddr					ipNetwork(?)
+
+[1] netgroup.byhost and netgroup.byuser appear to be unused by glibc
+[2] usually computed when tables are built; there is no specific
+    counterpart object class in a directory
+[3] there is no specific counterpart object class in rfc2307, but
+    nisObject could be used
+
+Shadow password information is also frequently kept in a directory, but
+if a directory is capable of performing password policy enforcement at
+the server, the shadow map's contents are best ignored when migrating.
+
+Historically, directory administrators have piped the output of 'ypcat'
+through scripts which split apart entries and produce boilerplate LDIF,
+which is then imported into the directory.  The script is typically also
+supplied a DN to be used when constructing the DNs for entries whose
+LDIF it outputs.
+
+As far as IPA is concerned, we already have access to a directory and we
+already know its schema, so we can provide a smarter
+tool which can do these things:
+ * automatically determine the right superior DN to use
+ * use exactly the right schema for an IPA server
+It may even go so far as to add entries to the server directly.
+
+There's one wrinkle here: automount maps.  Generally, an automount map
+is stored as a set of entries beneath an entry which serves as a
+container for the map, but the schema used for the container and the map
+entries themselves can vary.
+
+I checked with Jeff [1], and he tells me that Solaris automounter's
+native LDAP support expects to see maps stored as "automountMap" entries
+with the map name stored in the "automountMapName" attribute, with
+entries in the map being of type "automount", with the map key stored in
+the "automountKey" attribute and the value being stored in the
+"automountInformation" attribute, corresponding to the schema detailed
+in RFC2307bis.
+
+The current generation of the Linux client supports this scheme as well
+as two other legacy schemes, but the other two schemes are undesirable
+because they use the "cn" attribute to hold the key, and this prevents
+keys from being case-sensitive.  Case insensitivity is a big deployment
+problem for our customers.
+
+This is further complicated by care that the Linux client takes to avoid
+disruptions.  Specifically, when not configured to expect that a
+specific schema is in use, it will search for map information using each
+of the three, using the first which returns results, and when doing so,
+it attempts to use each legacy schema before attempting to use the
+recommended one.
+
+Given that, I think that we should only ever generate data which follows
+the RFC2307bis schema, only support administering such data, and leave
+the rest as a services and migration issue.
+
+The migration of data from automount maps presents a second problem --
+maps can be named arbitrarily, and when a domain contains automount maps
+other than "auto.master", those maps can have any valid name.  But they
+tend to have names which start with "auto." or "auto_", so a migration
+tool would most likely process the well-known maps using per-map schema,
+process maps which have names such as these as automount maps, and
+process all other maps as generic NIS map entries.
+
+The amount of review required suggests that this needs to be either a
+manual process or a guided one.
+
+[1] Inaccuracies are mine.

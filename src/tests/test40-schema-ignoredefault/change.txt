@@ -1,0 +1,2 @@
+adding new entry "cn=reindex now,cn=index,cn=tasks,cn=config"
+

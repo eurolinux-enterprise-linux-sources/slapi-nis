@@ -1,0 +1,92 @@
+From 63212ccae673e46334b874688741bf96d996fd36 Mon Sep 17 00:00:00 2001
+From: Thierry Bordaz <tbordaz@redhat.com>
+Date: Tue, 26 Apr 2016 13:17:03 +0300
+Subject: [PATCH 3/4] nis: add backend shutdown support to stop priming thread
+
+Resolves: rhbz#1327197
+---
+ src/back-nis.c |  6 ++++++
+ src/plug-nis.c | 34 +++++++++++++++++++++++++++-------
+ 2 files changed, 33 insertions(+), 7 deletions(-)
+
+diff --git a/src/back-nis.c b/src/back-nis.c
+index b9379c0..7fb191d 100644
+--- a/src/back-nis.c
++++ b/src/back-nis.c
+@@ -1021,6 +1021,12 @@ backend_startup(Slapi_PBlock *pb, struct plugin_state *state)
+ 	backend_shr_startup(state, pb, NIS_MAP_CONFIGURATION_FILTER);
+ }
+ 
++void
++backend_shutdown(struct plugin_state *state)
++{
++    backend_shr_shutdown(state);
++}
++
+ /* Set up our post-op callbacks. */
+ #ifdef SLAPI_NIS_SUPPORT_BE_TXNS
+ int
+diff --git a/src/plug-nis.c b/src/plug-nis.c
+index a1bdf89..ee90c37 100644
+--- a/src/plug-nis.c
++++ b/src/plug-nis.c
+@@ -81,14 +81,31 @@ plugin_startup(Slapi_PBlock *pb)
+ 	struct plugin_state *state;
+ 	const char *pname;
+ 	int i, protocol;
++	Slapi_DN *pluginsdn = NULL;
++
+ 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
+-	slapi_pblock_get(pb, SLAPI_TARGET_DN, &state->plugin_base);
+-	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+-			"configuration entry is %s%s%s\n",
+-			state->plugin_base ? "\"" : "",
+-			state->plugin_base ? state->plugin_base : "NULL",
+-			state->plugin_base ? "\"" : "");
++	slapi_pblock_get(pb, SLAPI_TARGET_SDN, &pluginsdn);
++	/* plugin base need to be duplicated because it will be destroyed
++	 * when pblock is destroyed but we need to use it in a separate thread */
++	if (NULL == pluginsdn || 0 == slapi_sdn_get_ndn_len(pluginsdn)) {
++        slapi_log_error(SLAPI_LOG_FATAL, state->plugin_desc->spd_id,
++                        "nis plugin_startup: unable to retrieve plugin DN\n");
++		return -1;
++
++    } else {
++        state->plugin_base = slapi_ch_strdup(slapi_sdn_get_dn(pluginsdn));
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"configuration entry is %s%s%s\n",
++				state->plugin_base ? "\"" : "",
++				state->plugin_base ? state->plugin_base : "NULL",
++				state->plugin_base ? "\"" : "");
++    }
++
+ 	/* Populate the maps and data. */
++        if (state->priming_mutex == NULL) {
++            state->priming_mutex = wrap_new_mutex();
++	    state->start_priming_thread = 1;
++        }
+ 	backend_startup(pb, state);
+ 	/* Start a new listening thread to handle incoming traffic. */
+ 	state->tid = wrap_start_thread(&dispatch_thread, state);
+@@ -177,6 +194,7 @@ plugin_shutdown(Slapi_PBlock *pb)
+ 	struct plugin_state *state;
+ 	int i, protocol;
+ 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
++        backend_shutdown(state);
+ 	for (i = 0; i < state->n_listeners; i++) {
+ 		if (state->pmap_client_socket != -1) {
+ 			switch (state->listener[i].type) {
+@@ -217,7 +235,9 @@ plugin_shutdown(Slapi_PBlock *pb)
+ #ifdef HAVE_TCPD_H
+ 	free(state->request_info);
+ #endif
+-	state->plugin_base = NULL;
++        if (state->plugin_base != NULL) {
++		slapi_ch_free((void **)&state->plugin_base);
++	}
+ 	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+ 			"plugin shutdown completed\n");
+ 	return 0;
+-- 
+2.7.4
+

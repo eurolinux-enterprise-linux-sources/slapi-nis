@@ -1,0 +1,21 @@
+#
+#  Modify the default for a 389-based directory so that newly-created
+#  databases will index the 'memberOf' attribute by default.  Older
+#  versions did not do so automatically, which causes a dramatic speed
+#  hit if you try to use these plugins, which frequently perform internal
+#  searches using memberOf in the filter.
+#
+dn: cn=memberOf,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: memberOf
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=memberOf, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: memberOf
+nsSystemIndex: false
+nsIndexType: eq
+

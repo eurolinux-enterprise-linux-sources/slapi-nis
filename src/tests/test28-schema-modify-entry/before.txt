@@ -1,0 +1,13 @@
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+dn: cn=g1,ou=group,cn=compat,cn=accounts,dc=example,dc=com
+memberUid: tuser1
+sequence: 1
+
+dn: cn=g2,ou=group,cn=compat,cn=accounts,dc=example,dc=com
+memberUid: tuser2
+memberUid: tuser1
+sequence: 2
+
+dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
+

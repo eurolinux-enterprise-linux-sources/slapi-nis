@@ -1,0 +1,8 @@
+* Finish figuring out sane default key and value formats for the set of maps
+  for which we're trying to provide default settings. (NIS)
+* More tests.
+* Stop using an internal function to send the LDAP result for failed searches.
+* Reintroduce / and // operator support in attribute references.
+* Look at moving the schema compatibility plugin to using a private database,
+  so that it doesn't have to store everything it has in memory, we get working
+  indexing, and so on and so forth.

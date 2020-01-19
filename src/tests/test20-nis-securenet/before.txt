@@ -1,0 +1,10 @@
+passwd.byname
+passwd.byuid
+example.com passwd.byname
+user1a	user1a:*:1001:1001:User 1 A:/home/user1a:/bin/sh
+user1b	user1b:*:1002:1002:User 1 B:/home/user1b:/bin/sh
+user1c	user1c:*:1003:1003:User 1 C:/home/user1c:/bin/sh
+example.com passwd.byuid
+1001	user1a:*:1001:1001:User 1 A:/home/user1a:/bin/sh
+1002	user1b:*:1002:1002:User 1 B:/home/user1b:/bin/sh
+1003	user1c:*:1003:1003:User 1 C:/home/user1c:/bin/sh

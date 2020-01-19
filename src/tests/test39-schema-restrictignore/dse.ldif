@@ -1,0 +1,38 @@
+dn: cn=compat-group,cn=Schema Compatibility,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: compat-group
+schema-compat-container-group: cn=compat,cn=accounts,dc=example,dc=com
+schema-compat-container-rdn: ou=group
+schema-compat-check-access: yes
+schema-compat-search-base: cn=groups,cn=Accounts,dc=example,dc=com
+schema-compat-search-base: cn=managed-groups,cn=Accounts,dc=example,dc=com
+schema-compat-search-filter: (&(objectClass=posixGroup)(gidNumber>=1500))
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=extensibleObject
+schema-compat-entry-attribute: memberUid=%deref_r("member","uid")
+schema-compat-entry-attribute: memberCN=%deref_r("member","nis-map")
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-ignore-subtree: cn=NIS Server,cn=plugins,cn=config
+schema-compat-restrict-subtree: cn=accounts,dc=example,dc=com
+
+dn: nis-domain=example.com+nis-map=name2mac,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: name2mac
+nis-base: cn=computers, cn=Accounts, dc=example, dc=com
+nis-filter: objectclass=ieee802device
+nis-keys-format: %mregsub("%{macaddress} %{cn}","(..:..:..:..:..:..) (.*)","%2")
+nis-values-format:  %{macaddress} %{cn}
+
+dn: nis-domain=example.com+nis-map=mac2name,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: mac2name
+nis-base: cn=computers, cn=Accounts, dc=example, dc=com
+nis-filter: objectclass=ieee802device
+nis-keys-format: %mregsub("%{macaddress} %{cn}","(..:..:..:..:..:..) (.*)","%1")
+nis-values-format:  %{macaddress} %{cn}
+

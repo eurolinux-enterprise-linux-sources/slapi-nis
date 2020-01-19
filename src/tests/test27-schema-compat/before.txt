@@ -1,0 +1,15 @@
+dn: cn=g1,cn=groups,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: top
+gidNumber: 1001
+memberUid: tuser1
+cn: g1
+
+dn: cn=g2,cn=groups,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: top
+gidNumber: 1002
+memberUid: %g1
+memberUid: tuser2
+cn: g2
+

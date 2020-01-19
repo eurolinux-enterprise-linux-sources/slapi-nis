@@ -1,0 +1,61 @@
+map list:
+mac2name
+name2mac
+mac2name
+name2mac
+all contents of example.com:name2mac:
+testbox1	01:02:03:04:05:06 testbox1
+testbox1	01:02:03:04:05:07 testbox1
+testbox1	01:02:03:04:05:08 testbox1
+testbox1	01:02:03:04:05:09 testbox1
+testbox1	01:02:03:04:05:0a testbox1
+testbox1	01:02:03:04:05:0b testbox1
+testbox1	01:02:03:04:05:0c testbox1
+testbox2	01:02:03:04:05:06 testbox2
+testbox2	01:02:03:04:05:07 testbox2
+testbox2	01:02:03:04:05:08 testbox2
+testbox2	01:02:03:04:05:09 testbox2
+testbox2	01:02:03:04:05:0a testbox2
+testbox2	01:02:03:04:05:0b testbox2
+testbox2	01:02:03:04:05:0c testbox2
+testbox3	01:02:03:04:05:06 testbox3
+testbox3	01:02:03:04:05:07 testbox3
+testbox3	01:02:03:04:05:08 testbox3
+testbox3	01:02:03:04:05:09 testbox3
+testbox3	01:02:03:04:05:0a testbox3
+testbox3	01:02:03:04:05:0b testbox3
+testbox3	01:02:03:04:05:0c testbox3
+cat contents of example.com:name2mac:
+testbox1	01:02:03:04:05:06 testbox1
+testbox2	01:02:03:04:05:0c testbox2
+testbox3	01:02:03:04:05:0c testbox3
+all contents of example.com:mac2name:
+01:02:03:04:05:06	01:02:03:04:05:06 testbox1
+01:02:03:04:05:06	01:02:03:04:05:06 testbox2
+01:02:03:04:05:06	01:02:03:04:05:06 testbox3
+01:02:03:04:05:07	01:02:03:04:05:07 testbox1
+01:02:03:04:05:07	01:02:03:04:05:07 testbox2
+01:02:03:04:05:07	01:02:03:04:05:07 testbox3
+01:02:03:04:05:08	01:02:03:04:05:08 testbox1
+01:02:03:04:05:08	01:02:03:04:05:08 testbox2
+01:02:03:04:05:08	01:02:03:04:05:08 testbox3
+01:02:03:04:05:09	01:02:03:04:05:09 testbox1
+01:02:03:04:05:09	01:02:03:04:05:09 testbox2
+01:02:03:04:05:09	01:02:03:04:05:09 testbox3
+01:02:03:04:05:0a	01:02:03:04:05:0a testbox1
+01:02:03:04:05:0a	01:02:03:04:05:0a testbox2
+01:02:03:04:05:0a	01:02:03:04:05:0a testbox3
+01:02:03:04:05:0b	01:02:03:04:05:0b testbox1
+01:02:03:04:05:0b	01:02:03:04:05:0b testbox2
+01:02:03:04:05:0b	01:02:03:04:05:0b testbox3
+01:02:03:04:05:0c	01:02:03:04:05:0c testbox1
+01:02:03:04:05:0c	01:02:03:04:05:0c testbox2
+01:02:03:04:05:0c	01:02:03:04:05:0c testbox3
+cat contents of example.com:mac2name:
+01:02:03:04:05:06	01:02:03:04:05:06 testbox1
+01:02:03:04:05:07	01:02:03:04:05:07 testbox1
+01:02:03:04:05:08	01:02:03:04:05:08 testbox1
+01:02:03:04:05:09	01:02:03:04:05:09 testbox1
+01:02:03:04:05:0a	01:02:03:04:05:0a testbox1
+01:02:03:04:05:0b	01:02:03:04:05:0b testbox1
+01:02:03:04:05:0c	01:02:03:04:05:0c testbox1

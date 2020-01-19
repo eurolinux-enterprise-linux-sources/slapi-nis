@@ -1,0 +1,632 @@
+== Function Specifiers ==
+
+Both the NIS Server and Schema Compatibility plugins use format
+specifiers given in their respective configurations to control how they
+massage the contents of entries which are already in the directory
+server into entries in either NIS maps or the compatibility area of the
+directory.
+
+=== Basics ===
+
+Format specifiers can reference values of attributes in the entry which
+is currently being examined like so:
+  %{attribute}
+
+The values of multiple attributes can be mixed together like so:
+  %{one_attribute}:%{another_attribute}
+
+Like shell variables, a reference to an attribute can specify a default
+value to be used in cases where the entry has no value for the specified
+attribute:
+  %{gecos:-%{cn:-}}
+
+Again, like shell variables, a reference can also specify an alternate
+value to be provided when the entry has a value (though this is not
+expected to be used as frequently) which should be overridden:
+  %{cn:+%{cn},,,}%{cn:-%{gecos}}
+
+Or to use a more concrete (but still simplified) example:
+  %{uid}:*:%{uidNumber}:%{gidNumber}:%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-/bin/sh}
+
+Additional operators include "#", "##", "%", "%%", "/", "//", which
+operate in ways similar to their shell counterparts (with one notable
+exception: patterns for the "/" operator can not currently be anchored
+to the beginning or end of the string).
+
+Strictly speaking, references to attributes return ''lists'' of values,
+or produce an evaluation error if no values are found.  This helps
+prevent invalid entries from showing up in NIS maps and in the
+directory.
+
+=== Functions ===
+
+Additionally, several built-in "function"s are available.  These can be
+used to modify data that's been read from the current entry before it's
+incorporated into the result, or for importing values from other entries
+and combining them with data from the current entry.  Generally,
+function invocations look like this:
+
+  %function(ARG[,...])
+
+A function invocation uses a comma-separated list of double-quoted
+arguments.  Any arguments which themselves contain a double-quote need
+to escape the double-quote using a '\' character.  Naturally, the '\'
+character itself also needs to be escaped whenever it appears.  Some
+functions can take expressions as arguments, allowing functions to
+operate on data after it has been acted on by other functions.
+
+== Implemented Functions ==
+
+=== first ===
+
+  first(''EXPRESSION''[,''DEFAULT''])
+
+Evaluates ''EXPRESSION'', and if one or more values is produced,
+provides only the first value.  (Here, ''first'' refers to the first
+value in the list of values after they've been sorted.)  If no values
+result, then ''DEFAULT'' is evaluated as an expression and its result is
+provided.  Nothing is done to ensure that ''DEFAULT'' provides only one
+value, however.
+
+=== match ===
+
+  match(''EXPRESSION'',''PATTERN''[,''DEFAULT''])
+
+Selects the single value of ''EXPRESSION'' which matches the globbing
+pattern ''PATTERN''.  If no value matches, and a ''DEFAULT'' was
+specified, then ''DEFAULT'' is evaluated as an expression and its value
+is provided.
+
+Here's an example entry:
+
+  dn: cn=group
+  member: bob
+  member: dave
+
+And here's how it evaluates out:
+
+  %match("%{member}","b*")        -> bob
+  %match("%{member}","d*")        -> dave
+  %match("%{member}","e*")        no value
+  %match("%{member}","*e*")       -> dave
+  %match("%{member}","e*","jim")  -> jim
+  %match("%{member}","*","%{cn}") -> group
+
+=== mmatch ===
+
+  mmatch(''EXPRESSION'',''PATTERN''])
+
+Similar to match, except that any number of matching values may be found
+and returned.
+
+=== regmatch ===
+
+  regmatch(''EXPRESSION'',''PATTERN''[,''DEFAULT''])
+
+Selects the value of ''EXPRESSION'' which matches the extended regular
+expression ''PATTERN''.  If no values match, and a ''DEFAULT'' was
+specified, then ''DEFAULT'' is evaluated as an expression and its value
+is produced.
+
+Here's an example entry:
+
+  dn: cn=group
+  member: bob
+  member: dave
+
+And here's how it evaluates out:
+
+  %regmatch("%{member}","^b.*")       -> bob
+  %regmatch("%{member}","^d.*")       -> dave
+  %regmatch("%{member}","e")          -> dave
+  %regmatch("%{member}","^e")         no value
+  %regmatch("%{member}","^e.*","jim") -> jim
+  %regmatch("%{member}",".*","%{cn}") -> group
+
+=== regmatchi ===
+
+  regmatchi(''EXPRESSION'',''PATTERN''[,''DEFAULT''])
+
+Exactly the same as regmatch, except that pattern matching is performed in a
+case-insensitive manner.
+
+=== mregmatch ===
+
+  mregmatch(''EXPRESSION'',''PATTERN''])
+
+Similar to regmatch, except that any number of matching values may be found
+and returned.
+
+=== mregmatchi ===
+
+  mregmatchi(''EXPRESSION'',''PATTERN''])
+
+Exactly the same as mregmatch, except that pattern matching is performed in
+a case-insensitive manner.
+
+=== regsub ===
+
+  regsub(''EXPRESSION'',''PATTERN'',''TEMPLATE''[,''DEFAULT''])
+
+Selects the value of ''EXPRESSION'' which matches the extended regular
+expression ''PATTERN'' and uses ''TEMPLATE'' to build the result.  If no
+values match, and a ''DEFAULT'' was specified, then ''DEFAULT'' is
+evaluated as an expression and its value is produced, otherwise an error
+occurs.
+
+The template is treated as a literal value, but is allowed to
+incorporate the n'th substring (one of the first nine) from the matched
+value by including the sequence "%n" in the template.
+
+Here's an example entry:
+
+  dn: cn=group
+  member: bob
+  member: dave
+
+And here's how it evaluates out:
+
+  %regsub("%{member}","o","%0")          -> bob
+  %regsub("%{member}","o","%1")          -> 
+  %regsub("%{member}","^o","%0")         no value
+  %regsub("%{member}","^d(.).*","%1")    -> a
+  %regsub("%{member}","^(.*)e","t%1y")   -> tdavy
+  %regsub("%{member}","^o","%0","jim")   -> jim
+  %regsub("%{member}","^o","%0","%{cn}") -> group
+
+=== regsubi ===
+
+  regsubi(''EXPRESSION'',''PATTERN'',''TEMPLATE''[,''DEFAULT''])
+
+Exactly the same as regsub, except that pattern matching is performed in a
+case-insensitive manner.
+
+=== mregsub ===
+
+  mregsub(''EXPRESSION'',''PATTERN'',''TEMPLATE'')
+
+Similar to regsub, except that any number of matching values may be found,
+processed, and returned.
+
+=== regsubi ===
+
+  mregsubi(''EXPRESSION'',''PATTERN'',''TEMPLATE'')
+
+Exactly the same as regsubi, except that pattern matching is performed in a
+case-insensitive manner.
+
+=== deref ===
+
+  deref(''THISATTRIBUTE'',''THATATTRIBUTE'')
+
+Returns a list of the values of ''THATATTRIBUTE'' for directory entries
+named by this entry's ''THISATTRIBUTE''.  Its function is similar in
+principle to the indirect CoS functionality provided by the directory
+server.
+
+Here are some example entries:
+
+  dn: cn=group
+  member: uid=bob
+  member: uid=pete
+
+  dn: uid=bob
+  uid: bob
+
+  dn: uid=pete
+  uid: pete
+
+And here's how various expressions evaluate for ''cn=group'':
+
+  %deref("member","foo") -> no values
+  %deref("member","uid") -> (bob,pete)
+
+Because the plugin attempts to track updates, the ''THISATTRIBUTE''
+attribute should be indexed and defined with a proper syntax and
+equality test in the directory server schema.
+
+=== deref_f ===
+
+  deref_f(''THISATTRIBUTE'',''FILTER'',''THATATTRIBUTE'')
+
+Returns a list of the values of ''THATATTRIBUTE'' for directory entries
+named by this entry's ''THISATTRIBUTE'' which match ''FILTER''.  Its function
+is similar in principle to the indirect CoS functionality provided by the
+directory server.
+
+Here are some example entries:
+
+  dn: cn=group
+  member: uid=bob
+  member: uid=pete
+
+  dn: uid=bob
+  uid: bob
+
+  dn: uid=pete
+  uid: pete
+
+And here's how various expressions evaluate for ''cn=group'':
+
+  %deref("member","objectclass=*","foo") -> no values
+  %deref("member","objectclass=*","uid") -> (bob,pete)
+  %deref("member","uid=pete","uid") -> (pete)
+
+Because the plugin attempts to track updates, the ''THISATTRIBUTE''
+attribute should be indexed and defined with a proper syntax and
+equality test in the directory server schema.
+
+=== deref_r ===
+
+  deref_r(''ATTRIBUTE''[,''OTHERATTRIBUTE''[...]],''VALUEATTRIBUTE'')
+
+Looks for entries named by this entry's ''ATTRIBUTE'', and then by those
+entries' ''ATTRIBUTE'', repeating the search until there are no more
+entries to find named by ''ATTRIBUTE'' in the set of entries seen.
+
+Taking that set as a new starting point, searches for entries named by
+that set's ''OTHERATTRIBUTE'' values, similarly repeating until a new
+complete set of entries is determined.  The process continues to be
+repeated for each listed attribute except the last.
+
+When the final set of entries is determined, their ''VALUEATTRIBUTE''
+values will be used to construct the result list.
+
+Here are some example entries:
+
+  dn: cn=group
+  member: cn=othergroup
+  member: uid=bob
+  includedgroup: clan=macleod
+
+  dn: cn=othergroup
+  member: uid=pete
+  uid: bogus
+
+  dn: uid=bob
+  uid: bob
+
+  dn: uid=pete
+  uid: pete
+
+  dn: clan=macleod
+  includedgroup: cn=foundlings
+
+  dn: cn=foundlings
+  member: uid=cmacleod
+  member: uid=dmacleod
+
+  dn: uid=cmacleod
+  uid: cmacleod
+
+  dn: uid=dmacleod
+  uid: dmacleod
+
+And here's how various expressions evaluate for ''cn=group'':
+
+  %deref_r("member","foo") -> no values
+  %deref_r("member","uid") -> (bogus,bob,pete)
+
+When evaluating the first attribute, the ''member'' attribute of
+''cn=group'' produces this set of entries:
+
+    * cn=group (the original entry)
+    * cn=othergroup (added because it was named by ''cn=group'')
+    * uid=bob (added because it was named by ''cn=group'')
+    * uid=pete (added because it was named by ''cn=othergroup'')
+
+The result list is pulled from this set of entries.
+
+Here's another example:
+
+  %deref_r("includedgroup","member","uid") -> (bogus,bob,cmacleod,dmacleod,pete)
+
+When evaluating the first attribute, the ''includedgroup'' attribute
+of ''cn=group'' leads to this set of entries:
+
+    * cn=group (the original entry)
+    * clan=macleod (named by cn=group)
+    * cn=foundlings (named by clan=macleod)
+
+When evaluating the second attribute, the ''member'' attribute values
+for the previous set of entries produces this set of entries:
+
+    * cn=othergroup (named by cn=group)
+    * uid=bob (named by cn=group)
+    * uid=cmacleod (named by cn=foundlings)
+    * uid=dmacleod (named by cn=foundlings)
+    * uid=pete (named by cn=othergroup)
+
+The result list is pulled from this set of entries.
+
+Because the plugin attempts to track updates, every attribute used here
+(except for ''VALUEATTRIBUTE'') should be indexed and defined with a
+proper syntax and equality test in the directory server schema.
+
+=== deref_rf ===
+
+  deref_r(''ATTRIBUTE'',''FILTER''[,''OTHERATTRIBUTE'',''OTHERFILTER''[,...]],''VALUEATTRIBUTE'')
+
+Looks for entries named by this entry's ''ATTRIBUTE'' which match the
+''FILTER'', and then by those entries' ''ATTRIBUTE'' which also match
+the ''FILTER'', repeating the search until there are no more entries to
+find named by ''ATTRIBUTE'' in the set of entries seen.
+
+Taking that set as a new starting point, searches for entries named by
+that set's ''OTHERATTRIBUTE'' values which match ''OTHERFILTER'',
+similarly repeating until a new complete set of entries is determined.
+The process continues to be repeated for each listed attribute except
+the last.
+
+When the final set of entries is determined, their ''VALUEATTRIBUTE''
+values will be used to construct the result list.
+
+Here are some example entries:
+
+  dn: cn=group
+  objectclass: group
+  member: cn=othergroup
+  member: uid=bob
+  includedgroup: clan=macleod
+
+  dn: cn=othergroup
+  objectclass: group
+  member: uid=pete
+  uid: bogus
+
+  dn: uid=bob
+  objectclass: user
+  uid: bob
+
+  dn: uid=pete
+  objectclass: user
+  uid: pete
+
+  dn: clan=macleod
+  objectclass: group
+  includedgroup: cn=foundlings
+
+  dn: cn=foundlings
+  objectclass: group
+  member: uid=cmacleod
+  member: uid=dmacleod
+
+  dn: uid=cmacleod
+  objectclass: user
+  uid: cmacleod
+
+  dn: uid=dmacleod
+  objectclass: user
+  uid: dmacleod
+
+And here's how various expressions evaluate for ''cn=group'':
+
+  %deref_rf("member","objectclass=*","foo") -> no values
+  %deref_rf("member","objectclass=user","uid") -> (bob)
+
+When evaluating the first attribute, the ''member'' attribute of
+''cn=group'' against filter 'objectclass=user', produces this set of
+entries:
+
+    * uid=bob (added because it was named by ''cn=group'' and matches
+               the filter)
+
+The result list is pulled from this set of entries.
+
+Here's another example:
+
+  %deref_rf("includedgroup","objectclass=group","member","objectclass=user","uid") -> no values
+
+When evaluating the first attribute, the ''includedgroup'' attribute
+of ''cn=group'' leads to this set of ''objectclass=group'' entries:
+
+    * clan=macleod (named by cn=group)
+
+When evaluating the second attribute, the ''member'' attribute values
+for the previous set of entries produces no ''objectclass=user'' entries.
+
+The result list is, therefore, empty.
+
+Because the plugin attempts to track updates, every attribute used here
+(except for ''VALUEATTRIBUTE'') should be indexed and defined with a
+proper syntax and equality test in the directory server schema.  This
+function can also be invoked as ''deref_fr''.
+
+=== referred ===
+
+  referred(''SET'',''THATATTRIBUTE'',''THATOTHERATTRIBUTE'')
+
+Creates a separated list of the values of ''THATOTHERATTRIBUTE'' stored
+in directory entries which have entries in the current group in the
+named ''SET'' and which also have this entry's name as a value for
+''THATATTRIBUTE''.
+
+Here are some example entries:
+
+  dn: cn=group
+
+  dn: uid=bob
+  memberof: cn=group
+  uid: bob
+
+  dn: uid=pete
+  memberof: cn=group
+  uid: pete
+
+And here's how various expressions evaluate for ''cn=group'', if
+''uid=bob'' and ''uid=pete'' are both part of a set of entries named
+''SET'':
+
+  %referred("SET","memberof","foo") -> no values
+  %referred("SET","memberof","uid") -> (bob,pete)
+
+Because the plugin performs searches internally, ''THATATTRIBUTE''
+should be indexed and defined with a proper syntax and equality test in
+the directory server schema.
+
+=== referred_r ===
+
+  referred_r(''SET'',''ATTRIBUTE''[,''OTHERSET'',''OTHERATTRIBUTE''[,...],''VALUEATTRIBUTE'')
+
+Searches for entries in the current group in both the current set and
+''SET'' which refer to this entry using ''ATTRIBUTE'', then searches for
+entries which refer to any of the just-found entries, repeating the
+process until a complete set of referring entries is formed.
+
+Then, searches for entries in ''SET'' and ''OTHERSET'' which refer to
+entries in the just-found set, repeating the process until a new
+complete set is formed.
+
+The value of ''VALUEATTRIBUTE'' for every entry encountered along the
+way will be returned.
+
+Here are some example entries:
+
+  dn: cn=group
+
+  dn: cn=othergroup
+  memberOf: cn=group
+
+  dn: uid=bob
+  uid: bob
+  memberOf: cn=group
+
+  dn: uid=pete
+  uid: pete
+  memberOf: cn=othergroup
+
+And here's how various expressions evaluate for ''cn=group'', if all of
+the entries with ''uid'' values are in a set named ''people'':
+
+  %referred("people","memberof","foo") -> no values
+  %referred("people","memberof","uid") -> (bob,pete)
+
+Because the plugin performs searches internally, every attribute used
+here (except for ''VALUEATTRIBUTE'') should be indexed and defined with
+a proper syntax and equality test in the directory server schema.
+
+=== merge ===
+
+  merge(''SEPARATOR'',''EXPRESSION''[,...])
+
+Evaluates and then creates a single value using multiple expressions
+which may evaluate to either single values or lists.  Any expressions
+which cannot be evaluated are ignored.
+
+Here are some example entries:
+
+  dn: cn=group
+  membername: jim
+  member: uid=bob
+  member: uid=pete
+
+  dn: uid=bob
+  uid: bob
+
+  dn: uid=pete
+  uid: pete
+
+And here's how an example expression evaluates for ''cn=group'':
+
+  %merge(":","%{membername}","%deref(\"member\",\"uid\")") -> jim:bob:pete
+  %merge(":","%{madeup}") -> (empty string)
+
+=== collect ===
+
+  collect(''EXPRESSION''[,...])
+
+Evaluates each ''EXPRESSION'' in turn, creating one large list by
+appending to it all of the values which are produced by evaluating every
+expression.  Any expressions which cannot be evaluated are ignored.
+
+Here's an example entry:
+
+  dn: cn=group
+  cn: group
+  membername: jim
+  member: uid=bob
+  member: uid=pete
+
+And here's how some example expressions evaluate for ''cn=group'':
+
+  %collect("%{bogus}","%{member}","%{membername}") -> (uid=bob,uid=pete,jim)
+
+=== link ===
+
+  link(''EXPRESSION'',''PAD''[,''SEPARATOR'',''EXPRESSION2'',''PAD2''[,...])
+
+Evaluates each ''EXPRESSION'' and ''PAD'' in turn to produce a list of
+values.  If the lists produced by each of the expressions are not of the
+same length, then each ''EXPRESSION'''s corresponding ''PAD'' value is
+appended to each list to pad them out until they are all of equal length
+(i.e., the length of the longest list).
+
+Then, one list of values is produced by using the first value from each
+list (separated by the corresponding SEPARATOR), then using the second
+values from each list, continuing until all lists have been exhausted.
+
+Here's an example entry:
+
+  dn: cn=group
+  cn: group
+  membername: jim
+  member: uid=bob
+  member: uid=pete
+
+And here's how an example expression evaluates for ''cn=group'':
+
+  %link("%{member}","?","/","%{membername}","?") -> (uid=bob/jim,uid=pete/?)
+
+=== ifeq ===
+
+  ifeq(''ATTRIBUTE'',''EXPRESSION'',''MATCH-EXPRESSION'',''NONMATCH-EXPRESSION'')
+
+Evaluates ''EXPRESSION'', and if the entry's ''ATTRIBUTE'' attribute
+matches the value provided by the expression (as determined by the
+server's matching rules for the attribute), evaluates and returns
+''MATCH-EXPRESSION'', otherwise ''NONMATCH-EXPRESSION'' will be
+evaluated and returned.
+
+Here's an example entry:
+
+  dn: cn=group
+  cn: group
+  membername: jim
+  member: uid=bob
+  member: uid=pete
+
+And here's how an example expression evaluates for ''cn=group'':
+
+  %ifeq("member","jim","","%{membername}") -> (jim)
+
+=== default ===
+
+  default(''EXPRESSION1'',''EXPRESSION2''[,...])
+
+Evaluates ''EXPRESSION1'', returning its values if any are produced.  If no
+result is produced, evaluates ''EXPRESSION2'', returning its values if any are
+produced.  Keeps trying successive expressions until it gets results or runs
+out of expressions.
+
+Here's an example entry:
+
+  dn: cn=group
+  cn: group
+  membername: jim
+  member: uid=bob
+  member: uid=pete
+
+And here's how an example expression evaluates for ''cn=group'':
+
+  %default("%{member}","jim") -> (uid=bob,uid=pete)
+  %default("%{membername}","bob") -> (jim)
+  %default("%{nosuchvalue}","bob") -> (bob)
+
+=== sort ===
+
+  sort(''EXPRESSION'')
+
+Evaluates ''EXPRESSION'', returning its values if any are produced, sorted by
+binary value.  This is more useful for ensuring consistency than prettiness,
+as the sorting is not case-aware and doesn't recognize numbers.
+

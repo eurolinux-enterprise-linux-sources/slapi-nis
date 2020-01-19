@@ -1,0 +1,15 @@
+dn: cn=compat-group,cn=Schema Compatibility,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: compat-group
+schema-compat-container-group: cn=compat,cn=accounts,dc=example,dc=com
+schema-compat-container-rdn: ou=group
+schema-compat-check-access: yes
+schema-compat-search-base: cn=groups,cn=Accounts,dc=example,dc=com
+schema-compat-search-base: cn=managed-groups,cn=Accounts,dc=example,dc=com
+schema-compat-search-filter: (&(objectClass=posixGroup)(gidNumber>=1500))
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=extensibleObject
+schema-compat-entry-attribute: memberUid=%deref_r("member","uid")
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+

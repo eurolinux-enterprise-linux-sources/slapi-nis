@@ -1,0 +1,356 @@
+[nothing]
+[all entries]
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: cn=testgroup1,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup1
+gidnumber: 3456
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup1,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup1
+gidnumber: 3456
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup2,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup2
+gidnumber: 34567
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup2,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup2
+gidnumber: 34567
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup3\2C for real,cn=groups,cn=compat,cn=accounts,dc=example,dc=co
+ m
+cn: testgroup3, for real
+gidnumber: 345678
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup3\2C for real,cn=groups,cn=compat,cn=accounts,dc=example,dc=co
+ m
+cn: testgroup3, for real
+gidnumber: 345678
+memberuid: testuser1
+memberuid: testuser2
+
+[all entries]
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: cn=testgroup1,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup1
+gidnumber: 3456
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup1,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup1
+gidnumber: 3456
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup2,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup2
+gidnumber: 34567
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup2,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+cn: testgroup2
+gidnumber: 34567
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup3\2C for real,cn=groups,cn=compat,cn=accounts,dc=example,dc=co
+ m
+cn: testgroup3, for real
+gidnumber: 345678
+memberuid: testuser1
+memberuid: testuser2
+
+dn: cn=testgroup3\2C for real,cn=groups,cn=compat,cn=accounts,dc=example,dc=co
+ m
+cn: testgroup3, for real
+gidnumber: 345678
+memberuid: testuser1
+memberuid: testuser2
+
+[auth to testgroup1]
+ldap_bind: No such object (32)
+[auth to testgroup2]
+ldap_bind: No such object (32)
+[auth to testgroup3, for real]
+ldap_bind: No such object (32)
+[just users]
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+[auth:AUTH_ERR]
+ldap_bind: Invalid credentials (49)
+[auth:OK]
+# extended LDIF
+#
+# LDAPv3
+# base <> with scope baseObject
+# filter: (objectclass=*)
+# requesting: dn: 
+#
+
+#
+dn:
+
+# search result
+search: 2
+result: 0 Success
+
+# numResponses: 2
+# numEntries: 1
+[acct:NEW_AUTHTOK_REQD]
+ldap_bind: Invalid credentials (49)
+[still just users]
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+[auth:MAXTRIES]
+ldap_bind: Constraint violation (19)
+[auth:PERM_DENIED]
+ldap_bind: Server is unwilling to perform (53)
+[acct:ACCT_EXPIRED]
+ldap_bind: Invalid credentials (49)
+[yup, still just users]
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser1,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser1
+uidnumber: 1234
+gidnumber: 2345
+gecos: Test User 1
+loginshell: /bin/sh
+homedirectory: /home/testuser1
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser2,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser2
+uidnumber: 12345
+gidnumber: 23456
+gecos: Test User 2
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+
+dn: uid=testuser3\2C for real,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+uid: testuser3, for real
+uidnumber: 123456
+gidnumber: 234567
+gecos: Test User 3
+loginshell: /bin/sh
+homedirectory: /home/testuser2
+

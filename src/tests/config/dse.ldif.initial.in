@@ -1,0 +1,1510 @@
+dn:
+objectClass: top
+aci: (targetattr != "aci")(version 3.0; aci "rootdse anon read access"; allow(
+ read,search,compare) userdn="ldap:///anyone";)
+
+dn: cn=config
+cn: config
+objectClass: top
+objectClass: extensibleObject
+objectClass: nsslapdConfig
+nsslapd-schemadir: @abs_top_srcdir@/tests/config/schema
+nsslapd-certdir: @abs_top_srcdir@/tests/config
+nsslapd-lockdir: @abs_top_builddir@/tests/state/lock
+nsslapd-tmpdir: @abs_top_builddir@/tests/state/tmp
+nsslapd-rundir: @abs_top_builddir@/tests/state/run
+nsslapd-ldifdir: @abs_top_builddir@/tests/state/ldif
+nsslapd-bakdir: @abs_top_builddir@/tests/state/bak
+nsslapd-instancedir: @abs_top_builddir@/tests/state
+nsslapd-accesslog-logging-enabled: on
+nsslapd-accesslog-maxlogsperdir: 10
+nsslapd-accesslog-mode: 600
+nsslapd-accesslog-maxlogsize: 100
+nsslapd-accesslog-logrotationtime: 1
+nsslapd-accesslog-logrotationtimeunit: day
+nsslapd-accesslog-logrotationsync-enabled: off
+nsslapd-accesslog-logrotationsynchour: 0
+nsslapd-accesslog-logrotationsyncmin: 0
+nsslapd-accesslog: @abs_top_builddir@/tests/state/log/access
+nsslapd-accesslog-level: 256
+nsslapd-enquote-sup-oc: off
+nsslapd-localhost: localhost
+nsslapd-threadnumber: 1
+nsslapd-schemacheck: on
+nsslapd-rewrite-rfc1274: off
+nsslapd-return-exact-case: on
+nsslapd-ssl-check-hostname: off
+nsslapd-port: @test_ldapport@
+nsslapd-localuser: @test_user@
+nsslapd-errorlog-logging-enabled: on
+nsslapd-errorlog-mode: 644
+nsslapd-errorlog-maxlogsperdir: 2
+nsslapd-errorlog-maxlogsize: 100
+nsslapd-errorlog-logrotationtime: 1
+nsslapd-errorlog-logrotationtimeunit: week
+nsslapd-errorlog-logrotationsync-enabled: off
+nsslapd-errorlog-logrotationsynchour: 0
+nsslapd-errorlog-logrotationsyncmin: 0
+nsslapd-errorlog: @abs_top_builddir@/tests/state/log/errors
+nsslapd-auditlog: @abs_top_builddir@/tests/state/log/audit
+nsslapd-auditlog-mode: 600
+nsslapd-auditlog-maxlogsize: 100
+nsslapd-auditlog-logrotationtime: 1
+nsslapd-auditlog-logrotationtimeunit: day
+nsslapd-rootdn: cn=Directory Manager
+nsslapd-maxdescriptors: 768
+nsslapd-max-filter-nest-level: 40
+nsslapd-rootpw: {SSHA}I5PjkCi6hBa6qcemk39EqU2lZIdmFYk3JHR0MA==
+nsslapd-ldapifilepath: @abs_top_builddir@/tests/state/slapd-blade.socket
+nsslapd-ldapilisten: off
+nsslapd-ldapimaprootdn: cn=Directory Manager
+nsslapd-ldapimaptoentries: off
+nsslapd-ldapiuidnumbertype: uidNumber
+nsslapd-ldapigidnumbertype: gidNumber
+nsslapd-ldapientrysearchbase: dc=example, dc=com
+nsslapd-security: off
+
+dn: cn=monitor
+objectClass: top
+objectClass: extensibleObject
+cn: monitor
+aci: (target ="ldap:///cn=monitor*")(targetattr != "aci || connection")(versio
+ n 3.0; acl "monitor"; allow( read, search, compare ) userdn = "ldap:///anyon
+ e";)
+
+dn: cn=encryption,cn=config
+objectClass: top
+objectClass: nsEncryptionConfig
+cn: encryption
+nsSSLSessionTimeout: 0
+nsSSLClientAuth: allowed
+nsSSL2: off
+nsSSL3: off
+
+dn: cn=features,cn=config
+objectClass: top
+objectClass: nsContainer
+cn: features
+
+dn: cn=mapping tree,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: mapping tree
+
+dn: cn=plugins, cn=config
+objectClass: top
+objectClass: nsContainer
+cn: plugins
+
+dn: cn=replication,cn=config
+objectClass: top
+objectClass: extensibleobject
+cn: replication
+
+dn: cn=sasl,cn=config
+objectClass: top
+objectClass: nsContainer
+cn: sasl
+
+dn: cn=SNMP,cn=config
+objectClass: top
+objectClass: nsSNMP
+cn: SNMP
+nsSNMPEnabled: on
+nsSNMPName:
+nsSNMPOrganization:
+nsSNMPLocation:
+nsSNMPContact:
+nsSNMPDescription:
+nsSNMPMasterHost:
+nsSNMPMasterPort:
+aci: (target="ldap:///cn=SNMP,cn=config")(targetattr !="aci")(version 3.0;acl 
+ "snmp";allow (read, search, compare)(userdn = "ldap:///anyone");)
+
+dn: cn=tasks,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: tasks
+
+dn: cn=uniqueid generator,cn=config
+objectClass: top
+objectClass: extensibleObject
+nsState:: AJXCIIRM3QGJbxvRqfLGJAAAAAAAAAAA
+cn: uniqueid generator
+
+dn: cn=counters,cn=monitor
+objectClass: top
+objectClass: extensibleObject
+cn: counters
+
+dn: cn=snmp,cn=monitor
+objectClass: top
+objectClass: extensibleObject
+cn: snmp
+
+dn: cn=options,cn=features,cn=config
+objectClass: top
+objectClass: nsContainer
+cn: options
+
+dn: cn="@test_basedn@",cn=mapping tree,cn=config
+objectClass: top
+objectClass: extensibleObject
+objectClass: nsMappingTree
+cn: "@test_basedn@"
+nsslapd-state: backend
+nsslapd-backend: userRoot
+
+dn: cn=7-bit check,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: 7-bit check
+nsslapd-pluginPath: libattr-unique-plugin
+nsslapd-pluginInitfunc: NS7bitAttr_Init
+nsslapd-pluginType: preoperation
+nsslapd-pluginEnabled: on
+nsslapd-pluginarg0: uid
+nsslapd-pluginarg1: mail
+nsslapd-pluginarg2: userpassword
+nsslapd-pluginarg3: ,
+nsslapd-pluginarg4: @test_basedn@
+nsslapd-plugin-depends-on-type: database
+nsslapd-pluginId: NS7bitAttr
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Enforce  7-bit clean attribute values
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=ACL Plugin,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: ACL Plugin
+nsslapd-pluginPath: libacl-plugin
+nsslapd-pluginInitfunc: acl_init
+nsslapd-pluginType: accesscontrol
+nsslapd-pluginEnabled: on
+nsslapd-plugin-depends-on-type: database
+nsslapd-pluginId: acl
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: acl access check plugin
+
+dn: cn=ACL preoperation,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: ACL preoperation
+nsslapd-pluginPath: libacl-plugin
+nsslapd-pluginInitfunc: acl_preopInit
+nsslapd-pluginType: preoperation
+nsslapd-pluginEnabled: on
+nsslapd-plugin-depends-on-type: database
+nsslapd-pluginId: acl
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: acl access check plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=attribute uniqueness,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: attribute uniqueness
+nsslapd-pluginPath: libattr-unique-plugin
+nsslapd-pluginInitfunc: NSUniqueAttr_Init
+nsslapd-pluginType: preoperation
+nsslapd-pluginEnabled: off
+nsslapd-pluginarg0: uid
+nsslapd-pluginarg1: dc=example, dc=com
+nsslapd-plugin-depends-on-type: database
+nsslapd-pluginId: NSUniqueAttr
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Enforce unique attribute values
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Binary Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Binary Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: bin_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: bin-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: binary attribute syntax plugin
+
+dn: cn=Bit String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Bit String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: bitstring_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: bitstring-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: binary attribute syntax plugin
+
+dn: cn=Bitwise Plugin,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Bitwise Plugin
+nsslapd-pluginPath: libbitwise-plugin
+nsslapd-pluginInitfunc: bitwise_init
+nsslapd-pluginType: matchingRule
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: bitwise
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: bitwise match plugin
+
+dn: cn=Boolean Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Boolean Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: boolean_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: boolean-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Boolean attribute syntax plugin
+
+dn: cn=Case Exact String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Case Exact String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: ces_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: ces-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: caseExactString attribute syntax plugin
+
+dn: cn=Case Ignore String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Case Ignore String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: cis_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: directorystring-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: DirectoryString attribute syntax plugin
+
+dn: cn=chaining database,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: chaining database
+nsslapd-pluginPath: libchainingdb-plugin
+nsslapd-pluginInitfunc: chaining_back_init
+nsslapd-pluginType: database
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: chaining database
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: LDAP chaining backend database plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Class of Service,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Class of Service
+nsslapd-pluginPath: libcos-plugin
+nsslapd-pluginInitfunc: cos_init
+nsslapd-pluginType: object
+nsslapd-pluginEnabled: on
+nsslapd-plugin-depends-on-type: database
+nsslapd-plugin-depends-on-named: State Change Plugin
+nsslapd-plugin-depends-on-named: Views
+nsslapd-pluginId: cos
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: class of service plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Country String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Country String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: country_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: countrystring-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Country String attribute syntax plugin
+
+dn: cn=Delivery Method Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Country String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: delivery_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: delivery-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Delivery Method attribute syntax plugin
+
+dn: cn=Distinguished Name Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Distinguished Name Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: dn_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: dn-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: distinguished name attribute syntax plugin
+
+dn: cn=Distributed Numeric Assignment Plugin,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+objectClass: nsContainer
+cn: Distributed Numeric Assignment Plugin
+nsslapd-pluginInitfunc: dna_init
+nsslapd-pluginType: preoperation
+nsslapd-pluginEnabled: off
+nsslapd-pluginPath: libdna-plugin
+nsslapd-pluginId: Distributed Numeric Assignment
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Distributed Numeric Assignment plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Enhanced Guide Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Enhanced Guide Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: enhancedguide_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: enhancedguide-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Enhanced Guide attribute syntax plugin
+
+dn: cn=Facsimile Telephone Number,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Facsimile Telephone Number Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: facsimile_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: facsimile-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Facsimile Telephone Number attribute syntax plugin
+
+dn: cn=Fax Image,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Enhanced Guide Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: fax_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: fax-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Fax Image attribute syntax plugin
+
+dn: cn=Generalized Time Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Generalized Time Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: time_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: time-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: GeneralizedTime attribute syntax plugin
+
+dn: cn=HTTP Client,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: HTTP Client
+nsslapd-pluginPath: libhttp-client-plugin
+nsslapd-pluginInitfunc: http_client_init
+nsslapd-pluginType: preoperation
+nsslapd-pluginEnabled: on
+nsslapd-plugin-depends-on-type: database
+nsslapd-pluginId: http-client
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: HTTP Client plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Integer Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Integer Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: int_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: int-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: integer attribute syntax plugin
+
+dn: cn=Internationalization Plugin,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Internationalization Plugin
+nsslapd-pluginPath: libcollation-plugin
+nsslapd-pluginInitfunc: orderingRule_init
+nsslapd-pluginType: matchingRule
+nsslapd-pluginEnabled: on
+nsslapd-pluginarg0: @abs_top_srcdir@/tests/config/slapd-collations.conf
+nsslapd-pluginId: orderingrule
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: internationalized ordering rule plugin
+
+dn: cn=JPEG Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: JPEG Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: jpeg_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: jpeg-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: JPEG attribute syntax plugin
+
+dn: cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: ldbm database
+nsslapd-pluginPath: libback-ldbm
+nsslapd-pluginInitfunc: ldbm_back_init
+nsslapd-pluginType: database
+nsslapd-pluginEnabled: on
+nsslapd-plugin-depends-on-type: Syntax
+nsslapd-plugin-depends-on-type: matchingRule
+nsslapd-pluginId: ldbm-backend
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: high-performance LDAP backend database plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: NIS Server
+nsslapd-pluginPath: @abs_top_builddir@/src/.libs/nisserver-plugin.so
+nsslapd-pluginInitfunc: nis_plugin_init
+nsslapd-pluginType: postoperation
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: nis-plugin
+nsslapd-version: 0.0
+nsslapd-pluginVendor: redhat.com
+nsslapd-pluginDescription: NIS Server Plugin
+nsslapd-pluginarg0: @test_nisport@
+nis-tcp-wrappers-name: nis-server
+nis-max-dgram-size: 2048
+nis-max-value-size: 1048576
+nsslapd-pluginVersion: 0.1
+
+dn: cn=Name and Optional UID Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Name and Optional UID Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: nameoptuid_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: nameoptuid-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Name and Optional UID syntax plugin
+
+dn: cn=Numeric String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Numeric String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: numstr_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: numericstring-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: numeric string attribute syntax plugin
+
+dn: cn=Octet String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Octet String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: octetstring_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: octetstring-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: octet string attribute syntax plugin
+
+dn: cn=OID Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: OID Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: oid_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: oid-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: OID attribute syntax plugin
+
+dn: cn=Password Storage Schemes,cn=plugins, cn=config
+objectClass: top
+objectClass: nsContainer
+cn: Password Storage Schemes
+numSubordinates: 13
+
+dn: cn=Postal Address Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Postal Address Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: postal_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: postaladdress-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Postal Address attribute syntax plugin
+
+dn: cn=Printable String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Printable String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: printable_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: printablestring-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Printable String attribute syntax plugin
+
+dn: cn=Retro Changelog Plugin,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Retro Changelog Plugin
+nsslapd-pluginPath: libretrocl-plugin
+nsslapd-pluginInitfunc: retrocl_plugin_init
+nsslapd-pluginType: object
+nsslapd-pluginEnabled: off
+nsslapd-plugin-depends-on-type: database
+nsslapd-plugin-depends-on-named: Class of Service
+nsslapd-pluginId: retrocl
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Retrocl Plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Roles Plugin,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Roles Plugin
+nsslapd-pluginPath: libroles-plugin
+nsslapd-pluginInitfunc: roles_init
+nsslapd-pluginType: object
+nsslapd-pluginEnabled: on
+nsslapd-plugin-depends-on-type: database
+nsslapd-plugin-depends-on-named: State Change Plugin
+nsslapd-plugin-depends-on-named: Views
+nsslapd-pluginId: roles
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: roles plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Schema Compatibility
+nsslapd-pluginPath: @abs_top_builddir@/src/.libs/schemacompat-plugin.so
+nsslapd-pluginInitfunc: schema_compat_plugin_init
+nsslapd-pluginType: object
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: schema-compat-plugin
+nsslapd-version: 0.0
+nsslapd-pluginVendor: redhat.com
+nsslapd-pluginDescription: Schema Compatibility Plugin
+nsslapd-pluginVersion: 0.1
+
+dn: cn=Search Guide Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Enhanced Guide Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: guide_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: guide-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Search Guide attribute syntax plugin
+
+dn: cn=Space Insensitive String Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Space Insensitive String Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: sicis_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: spaceinsensitivestring-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: space insensitive string attribute syntax plugin
+
+dn: cn=State Change Plugin,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: State Change Plugin
+nsslapd-pluginPath: libstatechange-plugin
+nsslapd-pluginInitfunc: statechange_init
+nsslapd-pluginType: postoperation
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: statechange
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: state change notification service plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=Telex Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Telex Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: telex_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: telex-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Telex attribute syntax plugin
+
+dn: cn=Teletex Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Teletex Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: teletex_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: teletex-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Teletex attribute syntax plugin
+
+dn: cn=Telephone Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Telephone Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: tel_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: tele-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: telephoneNumber attribute syntax plugin
+
+dn: cn=URI Syntax,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: URI Syntax
+nsslapd-pluginPath: libsyntax-plugin
+nsslapd-pluginInitfunc: uri_init
+nsslapd-pluginType: syntax
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: uri-syntax
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: uri attribute syntax plugin
+
+dn: cn=Views,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: Views
+nsslapd-pluginPath: libviews-plugin
+nsslapd-pluginInitfunc: views_init
+nsslapd-pluginType: object
+nsslapd-pluginEnabled: on
+nsslapd-plugin-depends-on-type: database
+nsslapd-plugin-depends-on-named: State Change Plugin
+nsslapd-pluginId: views
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: virtual directory information tree views plugin
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+
+dn: cn=mapping,cn=sasl,cn=config
+objectClass: top
+objectClass: nsContainer
+cn: mapping
+
+dn: cn=backup, cn=tasks, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: backup
+
+dn: cn=export, cn=tasks, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: export
+
+dn: cn=import, cn=tasks, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: import
+
+dn: cn=index, cn=tasks, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: index
+
+dn: cn=restore, cn=tasks, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: restore
+
+dn: cn=upgradedb, cn=tasks, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: upgradedb
+
+dn: cn=config,cn=chaining database,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: config
+nstransmittedcontrols: 2.16.840.1.113730.3.4.2
+nstransmittedcontrols: 2.16.840.1.113730.3.4.9
+nstransmittedcontrols: 1.2.840.113556.1.4.473
+nstransmittedcontrols: 1.3.6.1.4.1.1466.29539.12
+nspossiblechainingcomponents: cn=resource limits,cn=components,cn=config
+nspossiblechainingcomponents: cn=certificate-based authentication,cn=component
+ s,cn=config
+nspossiblechainingcomponents: cn=ACL Plugin,cn=plugins,cn=config
+nspossiblechainingcomponents: cn=old plugin,cn=plugins,cn=config
+nspossiblechainingcomponents: cn=referential integrity postoperation,cn=plugin
+ s,cn=config
+nspossiblechainingcomponents: cn=attribute uniqueness,cn=plugins,cn=config
+
+dn: cn=default instance config,cn=chaining database,cn=plugins,cn=config
+nsbindconnectionslimit: 3
+nsoperationconnectionslimit: 20
+nsabandonedsearchcheckinterval: 1
+nsconcurrentbindlimit: 10
+nsconcurrentoperationslimit: 2
+nsproxiedauthorization: on
+nsconnectionlife: 0
+nsbindtimeout: 15
+nsreferralonscopedsearch: off
+nschecklocalaci: off
+nsbindretrylimit: 3
+nsslapd-sizelimit: 2000
+nsslapd-timelimit: 3600
+nshoplimit: 10
+nsmaxresponsedelay: 60
+nsmaxtestresponsedelay: 15
+objectClass: top
+objectClass: extensibleObject
+cn: default instance config
+creatorsName: cn=chaining database,cn=plugins,cn=config
+modifiersName: cn=chaining database,cn=plugins,cn=config
+createTimestamp: 20071106230058Z
+modifyTimestamp: 20071106230058Z
+
+dn: cn=config,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: config
+nsslapd-lookthroughlimit: 5000
+nsslapd-mode: 600
+nsslapd-idlistscanlimit: 4000
+nsslapd-directory: @abs_top_builddir@/tests/state/db
+nsslapd-dbcachesize: 10000000
+nsslapd-db-logdirectory: @abs_top_builddir@/tests/state/db
+nsslapd-db-durable-transaction: on
+nsslapd-db-transaction-logging: on
+nsslapd-db-checkpoint-interval: 60
+nsslapd-db-transaction-batch-val: 0
+nsslapd-db-logbuf-size: 0
+nsslapd-db-private-import-mem: on
+nsslapd-import-cache-autosize: -1
+nsslapd-import-cachesize: 20000000
+nsslapd-idl-switch: new
+nsslapd-search-bypass-filter-test: on
+nsslapd-search-use-vlv-index: on
+nsslapd-exclude-from-export: entrydn entryid dncomp parentid numSubordinates
+nsslapd-serial-lock: on
+
+dn: cn=monitor, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: monitor
+numSubordinates: 1
+
+dn: cn=userRoot,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+objectClass: nsBackendInstance
+cn: userRoot
+nsslapd-suffix: @test_basedn@
+nsslapd-cachesize: -1
+nsslapd-cachememsize: 10485760
+nsslapd-readonly: off
+nsslapd-require-index: off
+nsslapd-directory: @abs_top_builddir@/tests/state/db/userRoot
+
+dn: cn=CLEAR,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: CLEAR
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: clear_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: clear-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: No encryption (CLEAR)
+
+dn: cn=CRYPT,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: CRYPT
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: crypt_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: crypt-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Unix crypt algorithm (CRYPT)
+
+dn: cn=DES,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+cn: DES
+nsslapd-pluginPath: libdes-plugin
+nsslapd-pluginInitfunc: des_init
+nsslapd-pluginType: reverpwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginarg0: nsmultiplexorcredentials
+nsslapd-pluginarg1: nsds5ReplicaCredentials
+nsslapd-pluginId: des-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: DES storage scheme plugin
+
+dn: cn=MD5,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: MD5
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: md5_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: md5-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: MD5 hash algorithm (MD5)
+
+dn: cn=NS-MTA-MD5,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: NS-MTA-MD5
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: ns_mta_md5_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: NS-MTA-MD5-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Netscape MD5 (NS-MTA-MD5)
+
+dn: cn=SHA,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SHA
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: sha_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: sha-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Secure Hashing Algorithm (SHA)
+
+dn: cn=SHA256,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SHA256
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: sha256_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: sha256-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Secure Hashing Algorithm (SHA256)
+
+dn: cn=SHA384,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SHA384
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: sha384_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: sha384-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Secure Hashing Algorithm (SHA384)
+
+dn: cn=SHA512,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SHA512
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: sha512_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: sha512-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Secure Hashing Algorithm (SHA512)
+
+dn: cn=SSHA,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SSHA
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: ssha_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: ssha-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Salted Secure Hashing Algorithm (SSHA)
+
+dn: cn=SSHA256,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SSHA256
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: ssha256_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: ssha256-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Salted Secure Hashing Algorithm (SSHA256)
+
+dn: cn=SSHA384,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SSHA384
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: ssha384_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: ssha384-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Salted Secure Hashing Algorithm (SSHA384)
+
+dn: cn=SSHA512,cn=Password Storage Schemes,cn=plugins,cn=config
+objectClass: top
+objectClass: nsSlapdPlugin
+cn: SSHA512
+nsslapd-pluginPath: libpwdstorage-plugin
+nsslapd-pluginInitfunc: ssha512_pwd_storage_scheme_init
+nsslapd-pluginType: pwdstoragescheme
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: ssha512-password-storage-scheme
+nsslapd-pluginVersion: 1.1.1
+nsslapd-pluginVendor: Fedora Project
+nsslapd-pluginDescription: Salted Secure Hashing Algorithm (SSHA512)
+
+dn: cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: default indexes
+
+dn: cn=database, cn=monitor, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: database
+
+dn: cn=encrypted attribute keys, cn=userRoot, cn=ldbm database, cn=plugins, cn
+ =config
+objectClass: top
+objectClass: extensibleObject
+cn: encrypted attribute keys
+
+dn: cn=encrypted attributes, cn=userRoot, cn=ldbm database, cn=plugins, cn=con
+ fig
+objectClass: top
+objectClass: extensibleObject
+cn: encrypted attributes
+
+dn: cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: index
+
+dn: cn=monitor, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: monitor
+
+dn: cn=aci,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: aci
+nsSystemIndex: true
+nsIndexType: pres
+
+dn: cn=cn,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: cn
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=entrydn,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=co
+ nfig
+objectClass: top
+objectClass: nsIndex
+cn: entrydn
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=givenName,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=
+ config
+objectClass: top
+objectClass: nsIndex
+cn: givenName
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=mail,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=confi
+ g
+objectClass: top
+objectClass: nsIndex
+cn: mail
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=mailAlternateAddress,cn=default indexes, cn=config,cn=ldbm database,cn=
+ plugins,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: mailAlternateAddress
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=mailHost,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=c
+ onfig
+objectClass: top
+objectClass: nsIndex
+cn: mailHost
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=member,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=con
+ fig
+objectClass: top
+objectClass: nsIndex
+cn: member
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=memberOf,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=c
+ onfig
+objectClass: top
+objectClass: nsIndex
+cn: memberOf
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=nsUniqueId,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn
+ =config
+objectClass: top
+objectClass: nsIndex
+cn: nsUniqueId
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=ntUniqueId,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn
+ =config
+objectClass: top
+objectClass: nsIndex
+cn: ntUniqueId
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=ntUserDomainId,cn=default indexes, cn=config,cn=ldbm database,cn=plugin
+ s,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: ntUserDomainId
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=numsubordinates,cn=default indexes, cn=config,cn=ldbm database,cn=plugi
+ ns,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: numsubordinates
+nsSystemIndex: true
+nsIndexType: pres
+
+dn: cn=objectclass,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,c
+ n=config
+objectClass: top
+objectClass: nsIndex
+cn: objectclass
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=owner,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=conf
+ ig
+objectClass: top
+objectClass: nsIndex
+cn: owner
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=parentid,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=c
+ onfig
+objectClass: top
+objectClass: nsIndex
+cn: parentid
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=seeAlso,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=co
+ nfig
+objectClass: top
+objectClass: nsIndex
+cn: seeAlso
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=sn,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: sn
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=telephoneNumber,cn=default indexes, cn=config,cn=ldbm database,cn=plugi
+ ns,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: telephoneNumber
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=uid,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,cn=config
+objectClass: top
+objectClass: nsIndex
+cn: uid
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=uniquemember,cn=default indexes, cn=config,cn=ldbm database,cn=plugins,
+ cn=config
+objectClass: top
+objectClass: nsIndex
+cn: uniquemember
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=3DES,cn=encrypted attribute keys,cn=userRoot,cn=ldbm database,cn=plugin
+ s,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: 3DES
+nssymmetrickey:: OkRAFOl2FZbKu+UnmlhsprVEbnG7SmBMpSp7duVJNnKgEw/fehQNpxBvurB6
+ aB7vSGdmNchefJp07ZYAF20EA3flm6CNYhdTIxTkG8JskFBrRhBUCZ6qTBp5AEHD21ML0oYLuXww
+ 0DUGiH49dSptMtRawn7qcLzOeQtTJrj7erU=
+
+dn: cn=AES,cn=encrypted attribute keys,cn=userRoot,cn=ldbm database,cn=plugins
+ ,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: AES
+nssymmetrickey:: Q99IyRk1jrrXltTO6yg3IBCOdtpG/aJQzlcuCc6RvtQJZVgln6KXazPuQBfU
+ 2C4o6B3j3Nm6qr74YBx+Tu+zKARbdwUvYtLaRtHYNCj1vvblAbKLv4Ptfx4PtTpp2A7dp5WoKDcW
+ GDl52MgFhTlanQtuPbjnBCf2jRPiYm1ZNfo=
+
+dn: cn=aci, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: aci
+nsSystemIndex: true
+nsIndexType: pres
+
+dn: cn=cn, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: cn
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=entrydn, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: entrydn
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=givenName, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=conf
+ ig
+objectClass: top
+objectClass: nsIndex
+cn: givenName
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=mail, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: mail
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=mailAlternateAddress, cn=index, cn=userRoot, cn=ldbm database, cn=plugi
+ ns, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: mailAlternateAddress
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=mailHost, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=confi
+ g
+objectClass: top
+objectClass: nsIndex
+cn: mailHost
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=member, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: member
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=memberOf, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=confi
+ g
+objectClass: top
+objectClass: nsIndex
+cn: memberOf
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=nscpEntryDN, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=co
+ nfig
+objectClass: top
+objectClass: nsIndex
+cn: nscpEntryDN
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=nsds5ReplConflict, cn=index, cn=userRoot, cn=ldbm database, cn=plugins,
+  cn=config
+objectClass: top
+objectClass: nsIndex
+cn: nsds5ReplConflict
+nsSystemIndex: true
+nsIndexType: eq
+nsIndexType: pres
+
+dn: cn=nsuniqueid, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=con
+ fig
+objectClass: top
+objectClass: nsIndex
+cn: nsuniqueid
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=ntUniqueId, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=con
+ fig
+objectClass: top
+objectClass: nsIndex
+cn: ntUniqueId
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=ntUserDomainId, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn
+ =config
+objectClass: top
+objectClass: nsIndex
+cn: ntUserDomainId
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=numsubordinates, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, c
+ n=config
+objectClass: top
+objectClass: nsIndex
+cn: numsubordinates
+nsSystemIndex: true
+nsIndexType: pres
+
+dn: cn=objectclass, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=co
+ nfig
+objectClass: top
+objectClass: nsIndex
+cn: objectclass
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=owner, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: owner
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=parentid, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=confi
+ g
+objectClass: top
+objectClass: nsIndex
+cn: parentid
+nsSystemIndex: true
+nsIndexType: eq
+
+dn: cn=seeAlso, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: seeAlso
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=sn, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: sn
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=telephoneNumber, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, c
+ n=config
+objectClass: top
+objectClass: nsIndex
+cn: telephoneNumber
+nsSystemIndex: false
+nsIndexType: pres
+nsIndexType: eq
+nsIndexType: sub
+
+dn: cn=uid, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=config
+objectClass: top
+objectClass: nsIndex
+cn: uid
+nsSystemIndex: false
+nsIndexType: eq
+
+dn: cn=uniquemember, cn=index, cn=userRoot, cn=ldbm database, cn=plugins, cn=c
+ onfig
+objectClass: top
+objectClass: nsIndex
+cn: uniquemember
+nsSystemIndex: false
+nsIndexType: eq
+

@@ -1,0 +1,49 @@
+From af63a29f8689f8649e70d963462a03485f9f30f5 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 24 Feb 2015 13:18:34 +0200
+Subject: [PATCH 2/2] nss: make sure to remember the length of reallocated
+ buffer
+
+---
+ src/back-sch-nss.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/back-sch-nss.c b/src/back-sch-nss.c
+index 3a21ff6..f8177d7 100644
+--- a/src/back-sch-nss.c
++++ b/src/back-sch-nss.c
+@@ -484,6 +484,7 @@ repeat:
+ 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
+ 			if (buf != NULL) {
+ 				cbdata->nsswitch_buffer = buf;
++				cbdata->nsswitch_buffer_len *= 2;
+ 				goto repeat;
+ 			}
+ 		}
+@@ -613,6 +614,7 @@ repeat:
+ 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
+ 			if (buf != NULL) {
+ 				cbdata->nsswitch_buffer = buf;
++				cbdata->nsswitch_buffer_len *= 2;
+ 				goto repeat;
+ 			}
+ 		}
+@@ -668,6 +670,7 @@ repeat:
+ 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
+ 			if (buf != NULL) {
+ 				cbdata->nsswitch_buffer = buf;
++				cbdata->nsswitch_buffer_len *= 2;
+ 				goto repeat;
+ 			}
+ 		}
+@@ -718,6 +721,7 @@ repeat:
+ 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
+ 			if (buf != NULL) {
+ 				cbdata->nsswitch_buffer = buf;
++				cbdata->nsswitch_buffer_len *= 2;
+ 				goto repeat;
+ 			}
+ 		}
+-- 
+2.1.0
+

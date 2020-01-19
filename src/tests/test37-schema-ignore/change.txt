@@ -1,0 +1,4 @@
+modifying entry "nis-domain=example.com+nis-map=name2mac,cn=NIS Server,cn=plugins,cn=config"
+
+modifying entry "cn=g2,cn=groups,cn=accounts,dc=example,dc=com"
+

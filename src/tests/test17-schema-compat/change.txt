@@ -1,0 +1,6 @@
+modifying entry "cn=group1a,cn=groups,cn=accounts,dc=example,dc=com"
+
+modifying entry "cn=group1b,cn=groups,cn=accounts,dc=example,dc=com"
+
+modifying entry "uid=user1c,cn=users1,cn=accounts,dc=example,dc=com"
+

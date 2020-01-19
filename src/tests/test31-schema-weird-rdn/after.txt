@@ -1,0 +1,13 @@
+dn: cn=-User 1 E,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=CRON\2C the destroyer,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=User 1 A,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=User 1 B,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=User 1 C,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=User 1 F\2B,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=User 1 G-,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=User 1\2BH,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=User 1\5C\2BI,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=You \2B Me \3D We,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=\2BUser 1 D,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: cn=compat,cn=accounts,dc=example,dc=com
+dn: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com

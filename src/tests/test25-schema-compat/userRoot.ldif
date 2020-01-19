@@ -1,0 +1,75 @@
+# users, accounts, example.com
+dn: cn=users,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: users
+
+# groups, accounts, example.com
+dn: cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: groups
+
+# tuser1, users, accounts, example.com
+dn: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
+uid: tuser1
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+loginShell: /bin/sh
+gidNumber: 1003
+gecos: tuser1
+sn: User
+homeDirectory: /home/tuser1
+cn: Tim User
+uidNumber: 1101
+
+# tuser2, users, accounts, example.com
+dn: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
+uid: tuser2
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+loginShell: /bin/sh
+gidNumber: 1004
+gecos: tuser2
+sn: User
+homeDirectory: /home/tuser2
+cn: Timmy User
+uidNumber: 1102
+
+# tuser3, users, accounts, example.com
+dn: uid=tuser3,cn=users,cn=accounts,dc=example,dc=com
+uid: tuser3
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+loginShell: /bin/sh
+gidNumber: 1004
+gecos: tuser3
+sn: User
+homeDirectory: /home/tuser3
+cn: Timothy User
+uidNumber: 1103
+
+# g1, groups, accounts, example.com
+dn: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+objectClass: posixGroup
+gidNumber: 1001
+cn: g1
+description: g1
+member: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
+
+# g2, groups, accounts, example.com
+dn: cn=g2,cn=groups,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: groupofnames
+objectClass: posixGroup
+gidNumber: 1002
+cn: g2
+description: g2
+member: cn=g1,cn=groups,cn=accounts,dc=example,dc=com
+member: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
+

@@ -1,0 +1,3 @@
+dn: cn=NIS Server,cn=plugins,cn=config
+nsslapd-pluginenabled: off
+

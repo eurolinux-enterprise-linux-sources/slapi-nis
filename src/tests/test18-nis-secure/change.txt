@@ -1,0 +1,2 @@
+modifying entry "nis-domain=example.com+nis-map=passwd.byname,cn=NIS Server,cn=plugins,cn=config"
+

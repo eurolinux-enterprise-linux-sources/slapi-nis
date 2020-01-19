@@ -1,0 +1,104 @@
+dn: cn=users,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: extensibleObject
+cn: users
+
+dn: uid=user1a,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+cn: user1a
+objectClass: posixaccount
+objectClass: top
+uidNumber: 1001
+gidNumber: 1001
+homeDirectory: /home/user1a
+loginShell: /bin/sh
+uid: user1a
+
+dn: uid=user1b,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+cn: user1b
+objectClass: posixaccount
+objectClass: top
+uidNumber: 1002
+gidNumber: 1002
+homeDirectory: /home/user1b
+loginShell: /bin/sh
+uid: user1b
+
+dn: uid=user1c,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+cn: user1c
+objectClass: posixaccount
+objectClass: top
+uidNumber: 1003
+gidNumber: 1003
+homeDirectory: /home/user1c
+loginShell: /bin/sh
+uid: user1c
+
+dn: uid=user2a,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+cn: user2a
+objectClass: posixaccount
+objectClass: top
+uidNumber: 2001
+gidNumber: 2001
+homeDirectory: /home/user2a
+loginShell: /bin/sh
+uid: user2a
+
+dn: uid=user2b,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+cn: user2b
+objectClass: posixaccount
+objectClass: top
+uidNumber: 2002
+gidNumber: 2002
+homeDirectory: /home/user2b
+loginShell: /bin/sh
+uid: user2b
+
+dn: uid=user2c,cn=users,cn=compat,cn=accounts,dc=example,dc=com
+cn: user2c
+objectClass: posixaccount
+objectClass: top
+uidNumber: 2003
+gidNumber: 2003
+homeDirectory: /home/user2c
+loginShell: /bin/sh
+uid: user2c
+
+dn: cn=group1a,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: posixgroup
+objectClass: top
+gidNumber: 3001
+cn: group1a
+
+dn: cn=group1b,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: posixgroup
+objectClass: top
+gidNumber: 3002
+cn: group1b
+
+dn: cn=group1c,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: posixgroup
+objectClass: top
+gidNumber: 3002
+cn: group1c
+
+dn: cn=group2a,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: posixgroup
+objectClass: top
+gidNumber: 4001
+cn: group2a
+
+dn: cn=group2b,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: posixgroup
+objectClass: top
+gidNumber: 4002
+cn: group2b
+
+dn: cn=group2c,cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: posixgroup
+objectClass: top
+gidNumber: 4002
+cn: group2c
+
+dn: cn=groups,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: extensibleObject
+cn: groups
+

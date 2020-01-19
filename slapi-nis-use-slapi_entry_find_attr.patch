@@ -1,0 +1,65 @@
+From 59198a21f15d310ad693f8b8cbd0df9595234ef5 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 14 Oct 2014 17:25:46 +0300
+Subject: [PATCH] Use slapi_entry_find_attr instead of slapi_entry_attr_exists
+
+To keep slapi-nis code portable to older versions of 389-ds-base,
+avoid using slapi_entry_attr_exists() as it was only introduced in
+389-ds-base 1.3.3.0.
+---
+ src/back-sch-idview.c | 3 ++-
+ src/back-sch.c        | 7 ++++++-
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/back-sch-idview.c b/src/back-sch-idview.c
+index f1150cd..93fbab5 100644
+--- a/src/back-sch-idview.c
++++ b/src/back-sch-idview.c
+@@ -157,6 +157,7 @@ idview_process_overrides(struct backend_search_cbdata *cbdata,
+ 	/* 2. If there is indeed an override, replace attribute values except for the ones that should be ignored */
+ 	if (override_entry != NULL) {
+ 		Slapi_Attr  *override_attr = NULL;
++		Slapi_Attr  *sattr = NULL;
+ 
+ 		result = slapi_entry_first_attr(override_entry, &override_attr);
+ 		while (result == 0) {
+@@ -173,7 +174,7 @@ idview_process_overrides(struct backend_search_cbdata *cbdata,
+ 			if (filterout_attrs[i] == NULL) {
+ 				/* Replace the attribute's value with the override or
+ 				 * add an override value if the attribute didn't exist */
+-				result = slapi_entry_attr_exists(entry, override_type);
++				result = slapi_entry_attr_find(entry, override_type, &sattr);
+ 				if (result == 1) {
+ 					result = slapi_entry_attr_delete(entry, override_type);
+ 				}
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 2388d2f..d0ed323 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -997,9 +997,11 @@ backend_search_entry_cb(const char *domain, const char *map, bool_t secure,
+ {
+ 	Slapi_DN *sdn;
+ 	Slapi_Entry *entry;
++	Slapi_Attr *attr = NULL;
+ 	struct backend_search_cbdata *cbdata;
+ 	struct backend_entry_data *entry_data;
+ 	int result;
++	bool_t is_attr_exists = FALSE;
+ 
+ 	cbdata = cb_data;
+ 	entry_data = backend_data;
+@@ -1042,7 +1044,10 @@ backend_search_entry_cb(const char *domain, const char *map, bool_t secure,
+ 			idview_process_overrides(cbdata, key, map, domain, entry);
+ 		}
+ 
+-		if (slapi_entry_attr_exists(entry, IPA_IDVIEWS_ATTR_ANCHORUUID) == 1) {
++		/* slapi_entry_attr_exists() was introduced only in https://fedorahosted.org/389/ticket/47710 */
++		is_attr_exists = slapi_entry_attr_find(entry, IPA_IDVIEWS_ATTR_ANCHORUUID, &attr) == 0;
++
++		if (is_attr_exists == TRUE) {
+ 			slapi_entry_attr_delete(entry, IPA_IDVIEWS_ATTR_ANCHORUUID);
+ 			slapi_entry_delete_string(entry, "objectClass", "ipaOverrideTarget");
+ 		}
+-- 
+2.1.0
+

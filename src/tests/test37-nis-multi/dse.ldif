@@ -1,0 +1,20 @@
+dn: nis-domain=example.com+nis-map=name2mac,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: name2mac
+nis-base: cn=computers, cn=Accounts, dc=example, dc=com
+nis-filter: objectclass=ieee802device
+nis-keys-format: %mregsub("%{macaddress} %{cn}","(..:..:..:..:..:..) (.*)","%2")
+nis-values-format:  %{macaddress} %{cn}
+
+dn: nis-domain=example.com+nis-map=mac2name,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: mac2name
+nis-base: cn=computers, cn=Accounts, dc=example, dc=com
+nis-filter: objectclass=ieee802device
+nis-keys-format: %mregsub("%{macaddress} %{cn}","(..:..:..:..:..:..) (.*)","%1")
+nis-values-format:  %{macaddress} %{cn}
+

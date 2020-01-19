@@ -1,0 +1,41 @@
+dn: cn=telnet, cn=ipServices, dc=example, dc=com
+objectClass: ipService
+cn: telnet
+ipServicePort: 23
+ipServiceProtocol: tcp
+ipServiceProtocol: udp
+
+dn: cn=telnets+ipServiceProtocol=tcp, cn=ipServices, dc=example, dc=com
+objectClass: ipService
+cn: telnets
+ipServicePort: 992
+ipServiceProtocol: tcp
+
+dn: cn=telnets+ipServiceProtocol=udp, cn=ipServices, dc=example, dc=com
+objectClass: ipService
+cn: telnets
+ipServicePort: 992
+ipServiceProtocol: udp
+
+dn: cn=ldaps, cn=ipServices, dc=example, dc=com
+objectClass: ipService
+cn: ldaps
+cn: ldap-ssl
+ipServicePort: 636
+ipServiceProtocol: tcp
+ipServiceProtocol: udp
+
+dn: cn=http+ipServiceProtocol=tcp, cn=ipServices, dc=example, dc=com
+objectClass: ipService
+cn: http
+cn: www
+ipServicePort: 80
+ipServiceProtocol: tcp
+
+dn: cn=http+ipServiceProtocol=udp, cn=ipServices, dc=example, dc=com
+objectClass: ipService
+cn: http
+cn: www
+ipServicePort: 80
+ipServiceProtocol: udp
+

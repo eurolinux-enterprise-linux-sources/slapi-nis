@@ -1,0 +1,180 @@
+From 79391fda05fba164af577bd0e08a2807643b7b48 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 28 Oct 2014 10:09:47 +0200
+Subject: [PATCH 1/2] ID views: ignore searches for views outside the subtrees
+ of schema-compat sets
+
+schema-compat plugin may provide multiple disjoint subtrees which
+can be used to request overridden entries by prefixing the subtree
+suffix with a
+
+  cn=<name of view>,cn=views,<subtree suffix>
+
+As subtrees may be disjoint, we cannot rely on the common suffix. Thus,
+any attempt to replace target DN and update filter terms must only be
+done once we are sure the search will be done in the subtree.
+
+This optimization prevents mistakenly changing the search filter when
+FreeIPA and SSSD search for the ID overrides themselves, as the same
+structure of the target DN is used for  cn=views,cn=accounts,$SUFFIX
+subtree in FreeIPA. This subtree is never handled by slapi-nis and
+should be ignored.
+
+https://bugzilla.redhat.com/show_bug.cgi?id=1157989
+---
+ src/back-sch-idview.c | 11 +++++--
+ src/back-sch.c        | 81 +++++++++++++++++++++++++++++++++++++++++++++------
+ 2 files changed, 81 insertions(+), 11 deletions(-)
+
+diff --git a/src/back-sch-idview.c b/src/back-sch-idview.c
+index 5a2b450..a56a9e9 100644
+--- a/src/back-sch-idview.c
++++ b/src/back-sch-idview.c
+@@ -334,6 +334,10 @@ idview_process_filter_cb(Slapi_Filter *filter, const char *filter_type, struct b
+ 						slapi_ber_bvdone(bval);
+ 						slapi_ber_bvcpy(bval, slapi_value_get_berval(anchor_val));
+ 						config->override_found = TRUE;
++						slapi_log_error(SLAPI_LOG_PLUGIN, cbdata->state->plugin_desc->spd_id,
++								"Overriding the filter %s with %s=%*s from the override %s\n.",
++								filter_type, filter_type, bval->bv_len, bval->bv_val,
++								slapi_entry_get_dn_const(cbdata->overrides[i]));
+ 						break;
+ 					}
+ 				}
+@@ -346,6 +350,11 @@ idview_process_filter_cb(Slapi_Filter *filter, const char *filter_type, struct b
+ 					slapi_ber_bvdone(bval);
+ 					slapi_ber_bvcpy(bval, slapi_value_get_berval(anchor_val));
+ 					config->override_found = TRUE;
++					slapi_log_error(SLAPI_LOG_PLUGIN, cbdata->state->plugin_desc->spd_id,
++							"Overriding the filter %s with %s=%*s from the override %s\n.",
++							filter_type, IPA_IDVIEWS_ATTR_ANCHORUUID,
++							bval->bv_len, bval->bv_val,
++							slapi_entry_get_dn_const(cbdata->overrides[i]));
+ 					break;
+ 				}
+ 
+@@ -366,8 +375,6 @@ idview_process_filter_cb(Slapi_Filter *filter, const char *filter_type, struct b
+  *
+  * Note that in reality we don't use original value of the uid/cn attribue. Instead, we use ipaAnchorUUID
+  * to refer to the original entry. */
+-extern char *
+-slapi_filter_to_string( const struct slapi_filter *f, char *buf, size_t bufsize );
+ void
+ idview_replace_filter(struct backend_search_cbdata *cbdata)
+ {
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 27d5101..27ac24f 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -1166,6 +1166,44 @@ backend_search_set_cb(const char *group, const char *set, bool_t flag,
+ 	return TRUE;
+ }
+ 
++/* Routines to search if a target DN is within any of the sets we handle */
++static bool_t
++backend_search_find_set_dn_in_group_cb(const char *group, const char *set, bool_t flag,
++					 void *backend_data, void *cb_data)
++{
++	struct backend_search_cbdata *cbdata;
++	struct backend_set_data *set_data;
++
++	cbdata = cb_data;
++	set_data = backend_data;
++
++	if (slapi_sdn_scope_test(cbdata->target_dn,
++				 set_data->container_sdn,
++				 cbdata->scope) == 1) {
++		cbdata->answer = TRUE;
++	}
++
++	if (slapi_sdn_compare(set_data->container_sdn,
++			      cbdata->target_dn) == 0) {
++		cbdata->answer = TRUE;
++	}
++
++	return TRUE;
++
++}
++
++static bool_t
++backend_search_find_set_dn_cb(const char *group, void *cb_data)
++{
++	struct backend_search_cbdata *cbdata;
++
++	cbdata = cb_data;
++	map_data_foreach_map(cbdata->state, group,
++			     backend_search_find_set_dn_in_group_cb, cb_data);
++	return TRUE;
++}
++
++/* Routines to find out the set that has the same group as requested */
+ static bool_t
+ backend_search_find_set_data_in_group_cb(const char *group, const char *set, bool_t flag,
+ 					 void *backend_data, void *cb_data)
+@@ -1340,9 +1378,6 @@ backend_search_cb(Slapi_PBlock *pb)
+ 			"searching from \"%s\" for \"%s\" with scope %d%s\n",
+ 			cbdata.target, cbdata.strfilter, cbdata.scope,
+ 			backend_sch_scope_as_string(cbdata.scope));
+-#ifdef USE_IPA_IDVIEWS
+-	idview_replace_target_dn(&cbdata.target, &cbdata.idview);
+-#endif
+ 	cbdata.target_dn = slapi_sdn_new_dn_byval(cbdata.target);
+ 	/* Check if there's a backend handling this search. */
+ 	if (!slapi_be_exist(cbdata.target_dn)) {
+@@ -1351,19 +1386,47 @@ backend_search_cb(Slapi_PBlock *pb)
+ 				"slapi_be_exists(\"%s\") = 0, "
+ 				"ignoring search\n", cbdata.target);
+ 		slapi_sdn_free(&cbdata.target_dn);
++		return 0;
++	}
++
++#ifdef USE_IPA_IDVIEWS
++	/* We may have multiple disjoint trees in the sets, search if the target matches any of them
++	 * as in general there don't have to be a single subtree (cn=compat,$SUFFIX) for all trees to easily
++	 * detect the ID view use. Unless the ID view is within the set we control, don't consider the override */
++	map_data_foreach_domain(cbdata.state, backend_search_find_set_dn_cb, &cbdata);
++	if (cbdata.answer == FALSE) {
++		idview_replace_target_dn(&cbdata.target, &cbdata.idview);
+ 		if (cbdata.idview != NULL) {
+-			slapi_ch_free_string(&cbdata.target);
++			slapi_sdn_free(&cbdata.target_dn);
++			/* Perform another check, now for rewritten DN */
++			cbdata.target_dn = slapi_sdn_new_dn_byval(cbdata.target);
++			map_data_foreach_domain(cbdata.state, backend_search_find_set_dn_cb, &cbdata);
++			/* Rewritten DN might still be outside of our trees */
++			if (cbdata.answer == TRUE) {
++				slapi_log_error(SLAPI_LOG_PLUGIN, cbdata.state->plugin_desc->spd_id,
++						"Use of ID view '%s' is detected, searching from \"%s\" "
++						"for \"%s\" with scope %d%s. Filter may get overridden later.\n",
++						cbdata.idview, cbdata.target, cbdata.strfilter, cbdata.scope,
++						backend_sch_scope_as_string(cbdata.scope));
++			} else {
++				slapi_sdn_free(&cbdata.target_dn);
++				slapi_ch_free_string(&cbdata.target);
++				slapi_ch_free_string(&cbdata.idview);
++				slapi_log_error(SLAPI_LOG_PLUGIN,
++						cbdata.state->plugin_desc->spd_id,
++						"The search base didn't match any of the containers, "
++						"ignoring search\n");
++				return 0;
++			}
+ 		}
+-		slapi_ch_free_string(&cbdata.idview);
+-#ifdef USE_IPA_IDVIEWS
+-		idview_free_overrides(&cbdata);
+-#endif
+-		return 0;
+ 	}
++	cbdata.answer = FALSE;
++#endif
+ 
+ 	/* Walk the list of groups. */
+ 	wrap_inc_call_level();
+ #ifdef USE_IPA_IDVIEWS
++	/* Filter replacement requires increased call level as we may fetch overrides and thus come back here */
+ 	idview_replace_filter(&cbdata);
+ #endif
+ 	if (map_rdlock() == 0) {
+-- 
+2.1.0
+

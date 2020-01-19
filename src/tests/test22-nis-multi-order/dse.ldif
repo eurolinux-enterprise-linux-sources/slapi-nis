@@ -1,0 +1,12 @@
+dn: nis-domain=example.com+nis-map=stuff,cn=NIS Server,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+nis-domain: example.com
+nis-map: stuff
+nis-base: cn=Stuff, dc=example, dc=com
+nis-filter: (objectClass=*)
+nis-keys-format: >1<,%{testattra},%{testattrb}
+nis-keys-format: >2<,%{testattra},%{testattrb}
+nis-keys-format: >3<,%{testattra},%{testattrb}
+nis-values-format: %{testattra},%{testattrb},%{testattrc}
+

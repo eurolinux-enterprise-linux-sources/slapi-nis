@@ -1,0 +1,207 @@
+From 2df48b57adb666112cab22e62750dd984fc7450a Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Wed, 23 Dec 2015 14:57:03 +0200
+Subject: [PATCH 05/12] slapi-nis: populate data trees asynchronously after
+ LDAP server startup
+
+Currently slapi-nis design assumes the map cache is populated by
+scanning the original trees on plugin start up. This has few
+consequences:
+   - LDAP server cannot serve LDAP clients until all plugins are
+     initialized
+
+   - slapi-nis cannot ask SSSD to resolve external identities at
+     this point as SSSD will need to talk to the LDAP server which
+     is at this point not listening for connections. SSSD will put
+     whole IPA domain into offline and always will respond
+     with negative result
+
+To solve these issues, schedule tree scan after LDAP server startup.
+The problem here is that it is not possible to reliably detect when
+389-ds starts to listen to the incoming connections. However, it is
+possible to schedule an event into 389-ds event queue that will run
+shortly after start of the event loop. Given that the call back function
+which is registered to be called is called within the event loop thread,
+one can fire off another thread and wait in the thread function some
+time until the LDAP server is ready for connections.
+
+The time interval is something that would depend on a specific
+deployment profile but experiments show that having 5 seconds delay
+should be enough as event queue is created just before starting the
+listeners.
+---
+ src/back-shr.c | 110 ++++++++++++++++++++++++++++++++++++++++++++++++---------
+ src/plug-sch.c |   4 +--
+ 2 files changed, 96 insertions(+), 18 deletions(-)
+
+diff --git a/src/back-shr.c b/src/back-shr.c
+index c68640a..36ecc0b 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -664,40 +664,56 @@ backend_shr_get_vattr_sdnlist(struct plugin_state *state,
+ 	return ret;
+ }
+ 
+-/* Scan for the list of configured groups and sets. */
+-void
+-backend_shr_startup(struct plugin_state *state,
+-		    Slapi_PBlock *parent_pb,
+-		    const char *filter)
++struct backend_shr_data_init_cbdata {
++	Slapi_PBlock *parent_pb;
++	struct plugin_state *state;
++	const char *filter;
++};
++
++#define PLUGIN_SCAN_DELAY 5
++
++static void
++backend_shr_data_initialize_thread_cb(void *arg)
+ {
+-	Slapi_PBlock *pb;
++	struct backend_shr_data_init_cbdata *cbdata = (struct backend_shr_data_init_cbdata *)arg;
++	Slapi_PBlock *pb = NULL;
+ 	struct backend_set_config_entry_add_cbdata set_cbdata;
++	int result = 0;
++	if (cbdata == NULL) {
++		return;
++	}
++
++	/* Scan may require consulting SSSD for external identities
++	 * therefore, we need to make sure the scan starts after ns-slapd
++	 * started to serve LDAP clients. There is no a signal for this,
++	 * so we just wait some time. */
++	DS_Sleep(PR_SecondsToInterval(PLUGIN_SCAN_DELAY));
+ 
+-	backend_update_params(parent_pb, state);
++	backend_update_params(cbdata->parent_pb, cbdata->state);
+ 
+ 	slapi_log_error(SLAPI_LOG_PLUGIN,
+-			state->plugin_desc->spd_id,
++			cbdata->state->plugin_desc->spd_id,
+ 			"searching under \"%s\" for configuration\n",
+-			state->plugin_base);
+-	pb = wrap_pblock_new(parent_pb);
++			cbdata->state->plugin_base);
++	pb = wrap_pblock_new(cbdata->parent_pb);
+ 	slapi_search_internal_set_pb(pb,
+-				     state->plugin_base,
++				     cbdata->state->plugin_base,
+ 				     LDAP_SCOPE_ONELEVEL,
+-				     filter,
++				     cbdata->filter,
+ 				     NULL, FALSE,
+ 				     NULL,
+ 				     NULL,
+-				     state->plugin_identity,
++				     cbdata->state->plugin_identity,
+ 				     0);
+ 	if (map_wrlock() != 0) {
+ 		slapi_log_error(SLAPI_LOG_PLUGIN,
+-				state->plugin_desc->spd_id,
++				cbdata->state->plugin_desc->spd_id,
+ 				"failed to search under \"%s\" for "
+ 				"configuration: failed to acquire a lock\n",
+-				state->plugin_base);
++				cbdata->state->plugin_base);
+ 		goto done_with_lock;
+ 	}
+-	set_cbdata.state = state;
++	set_cbdata.state = cbdata->state;
+ 	set_cbdata.pb = pb;
+ 	slapi_search_internal_callback_pb(pb, &set_cbdata,
+ 					  NULL,
+@@ -706,6 +722,68 @@ backend_shr_startup(struct plugin_state *state,
+ 	map_unlock();
+ done_with_lock:
+ 	slapi_pblock_destroy(pb);
++        if (cbdata) {
++		slapi_ch_free((void**)&cbdata);
++        }
++}
++
++static void
++backend_shr_data_initialize_thread(time_t when, void *arg)
++{
++	struct backend_shr_data_init_cbdata *cbdata = (struct backend_shr_data_init_cbdata *)arg;
++	PRThread *thread = NULL;
++
++	/* start data import as a separate thread */
++	thread = PR_CreateThread(PR_USER_THREAD, backend_shr_data_initialize_thread_cb,
++			(void *)arg, PR_PRIORITY_NORMAL, PR_GLOBAL_THREAD,
++			PR_UNJOINABLE_THREAD, SLAPD_DEFAULT_THREAD_STACKSIZE);
++	if (thread == NULL) {
++		slapi_log_error(SLAPI_LOG_FATAL,
++				cbdata->state->plugin_desc->spd_id,
++				"unable to create compatibility tree scan thread!\n");
++	} else {
++		slapi_log_error(SLAPI_LOG_FATAL,
++				cbdata->state->plugin_desc->spd_id,
++				"%s tree scan will start in about %d seconds!\n",
++				cbdata->state->plugin_desc->spd_id, PLUGIN_SCAN_DELAY);
++	}
++
++}
++
++/* Scan for the list of configured groups and sets. */
++void
++backend_shr_startup(struct plugin_state *state,
++		    Slapi_PBlock *parent_pb,
++		    const char *filter)
++{
++	struct backend_shr_data_init_cbdata *cbdata = NULL;
++
++	cbdata = (struct backend_shr_data_init_cbdata *) 
++		 slapi_ch_malloc(sizeof(struct backend_shr_data_init_cbdata));
++
++	if (cbdata == NULL) {
++		slapi_log_error(SLAPI_LOG_FATAL,
++				state->plugin_desc->spd_id,
++				"failed to create a task for populating "
++				"compatibility tree\n");
++		return;
++	}
++
++	cbdata->state = state;
++	cbdata->parent_pb = parent_pb;
++	cbdata->filter = filter;
++
++	/* Schedule running a callback that will create a thread */
++	slapi_eq_once(backend_shr_data_initialize_thread,
++		      cbdata, PR_SecondsToInterval(PLUGIN_SCAN_DELAY));
++
++	slapi_log_error(SLAPI_LOG_FATAL,
++			cbdata->state->plugin_desc->spd_id,
++			"scheduled %s tree scan in about %d seconds after the server startup!\n",
++			state->plugin_desc->spd_id, PLUGIN_SCAN_DELAY);
++
++	return;
++
+ }
+ 
+ /* Process a set configuration directory entry.  Pull out the group and set
+diff --git a/src/plug-sch.c b/src/plug-sch.c
+index f132e6d..95a4fd8 100644
+--- a/src/plug-sch.c
++++ b/src/plug-sch.c
+@@ -109,8 +109,6 @@ plugin_startup(Slapi_PBlock *pb)
+ 			state->plugin_base ? "\"" : "",
+ 			state->plugin_base ? state->plugin_base : "NULL",
+ 			state->plugin_base ? "\"" : "");
+-	/* Populate the tree of fake entries. */
+-	backend_startup(pb, state);
+ 	state->pam_lock = wrap_new_rwlock();
+ 	backend_nss_init_context((struct nss_ops_ctx**) &state->nss_context);
+ 	if ((slapi_pblock_get(pb, SLAPI_PLUGIN_CONFIG_ENTRY, &plugin_entry) == 0) &&
+@@ -123,6 +121,8 @@ plugin_startup(Slapi_PBlock *pb)
+ 	wrap_rwlock_wrlock(state->cached_entries_lock);
+ 	state->cached_entries = PL_NewHashTable(0, PL_HashString, PL_CompareStrings, PL_CompareValues, 0, 0);
+ 	wrap_rwlock_unlock(state->cached_entries_lock);
++	/* Populate the tree of fake entries. */
++	backend_startup(pb, state);
+ 	/* Note that the plugin is ready to go. */
+ 	slapi_log_error(SLAPI_LOG_PLUGIN, plugin_description.spd_id,
+ 			"plugin startup completed\n");
+-- 
+2.5.0
+

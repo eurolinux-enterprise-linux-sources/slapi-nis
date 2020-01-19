@@ -1,0 +1,18 @@
+The submitted patch for fixing the plugin for use with transactions enabled
+makes these changes:
+                                   traditional               betxn
+pre-bind (schema-compat only)      preoperation           preoperation
+pre-compare (schema-compat only)   preoperation           preoperation
+pre-search (schema-compat only)    preoperation           preoperation
+pre-add (schema-compat only)       preoperation        betxnpreoperation
+pre-rename (schema-compat only)    preoperation        betxnpreoperation
+pre-modify (schema-compat only)    preoperation        betxnpreoperation
+pre-delete (schema-compat only)    preoperation        betxnpreoperation
+post-add                           postoperation       betxnpostoperation
+post-rename                        postoperation       betxnpostoperation
+post-modify                        postoperation       betxnpostoperation
+post-delete                        postoperation       betxnpostoperation
+internal-post-add              internalpostoperation           -
+internal-post-rename           internalpostoperation           -
+internal-post-modify           internalpostoperation           -
+internal-post-delete           internalpostoperation           -

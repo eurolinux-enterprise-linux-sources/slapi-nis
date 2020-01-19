@@ -1,0 +1,241 @@
+= Getting Started with the Schema Compatibility Plugin =
+
+This module becomes useful when the information stored in a directory
+"looks" almost like a particular piece of client software expects it to
+look.
+
+Let's assume a hypothetical mailing list manager for the ''example.com''
+domain which expects subscription information for a mailing list to look
+like this:
+
+    dn: cn=example-group-list,cn=Mail Lists,dc=example,dc=com
+    cn: example-group-list
+    subscriber: jim@example.com
+    subscriber: dave@example.com
+
+We'll assume that some portion of the DN is not as important as the
+contents of the ''cn'' and ''subscriber'' attributes, because the mailing
+list manager lets us configure a base DN under which it will search for
+list information (if it doesn't afford you that much, then, well, wow).
+
+In our example, we're also going to assume we actually have entries
+which look like this:
+
+    dn: cn=example-group,cn=Groups,dc=example,dc=com
+    cn: example-group
+    mail: example-group-list@example.com
+    member: uid=jim,cn=Users,dc=example,dc=com
+    member: uid=dave,cn=Users,dc=example,dc=com
+
+    dn: uid=jim,cn=Users,dc=example,dc=com
+    mail: jim@example.com
+
+    dn: uid=dave,cn=Users,dc=example,dc=com
+    mail: dave@example.com
+
+The first thing we need to do is to load the plugin into the directory
+server.
+
+== Loading the plugin ==
+
+While the server is running (or not), add an entry like this to the
+cn=config tree:
+
+    dn: cn=Schema Compatibility, cn=plugins, cn=config
+    objectClass: top
+    objectClass: nsSlapdPlugin
+    objectClass: extensibleObject
+    cn: Schema Compatibility
+    nsslapd-pluginPath: /usr/lib/dirsrv/plugins/schemacompat-plugin.so
+    nsslapd-pluginInitfunc: schema_compat_plugin_init
+    nsslapd-pluginType: object
+    nsslapd-pluginEnabled: on
+    nsslapd-pluginDescription: Schema Compatibility Plugin
+    nsslapd-pluginVendor: redhat.com
+    nsslapd-pluginVersion: 0
+    nsslapd-pluginID: schema-compat-plugin
+
+The name of the entry can be anything you like, but the path to the
+plugin itself needs to be correct for your system.
+
+Once the plugin is loaded, we can start configuring it to provide data.
+
+== Configuring a Basic Set of Entries ==
+
+The plugin expects to be used to convert data from one set of entries
+(a set found by searching the directory) into another set of entries
+which will appear in a different portion of the directory.  In our
+example, we'll make all of the plugin's data appear in a section of the
+tree contained by the entry ''cn=compat,dc=example,dc=com''.
+
+At minimum, for a set of entries, we need to tell the plugin how to find
+the entries it should use as input (using a search base and a filter),
+and how to derive the DN and other attributes for the entries which it
+will be synthesizing.
+
+Each set can be configured by creating a configuration entry as a child
+of the entry which caused the plugin to be loaded, like so:
+
+    dn: cn=Group Lists, cn=Schema Compatibility, cn=plugins, cn=config
+    objectClass: top
+    objectClass: extensibleObject
+    cn: Group Lists
+    schema-compat-search-base: cn=Groups,dc=example,dc=com
+    schema-compat-search-filter: (cn=*)
+    schema-compat-container-group: cn=compat,dc=example,dc=com
+    schema-compat-container-rdn: cn=lists
+    schema-compat-entry-rdn: cn=%{cn}
+
+Suddenly, a container entry with the name ''cn=compat,dc=example,dc=com''
+appears in the directory.  Beneath it, a container entry with the name
+''cn=lists,cn=compat,dc=example,dc=com'' appears, and beneath that, one
+with the name ''cn=example-group,cn=lists,cn=compat,dc=example,dc=com''.
+
+The new entry for the list looks like this:
+
+    dn: cn=example-group,cn=lists,cn=compat,dc=boston,dc=redhat,dc=com
+    cn: example-group
+    objectClass: extensibleObject
+    objectClass: top
+
+The ''schema-compat-entry-rdn'' attribute allows a format specifier to
+be used, to allow the value it takes in a new entry to vary based on the
+contents of the corresponding source entry.  In this example, we copied
+the value of the ''cn'' attribute, but it could as easily have been
+anything else.
+
+== Configuring a Useful Set of Entries ==
+
+We can do more than just provide just a distinguished name, though.  By
+using the ''schema-compat-entry-attribute'' setting, we can add any
+attribute from the source entry to the synthetic entry:
+
+    dn: cn=Group Lists, cn=Schema Compatibility, cn=plugins, cn=config
+    objectClass: top
+    objectClass: extensibleObject
+    cn: Group Lists
+    schema-compat-search-base: cn=Groups,dc=example,dc=com
+    schema-compat-search-filter: (cn=*)
+    schema-compat-container-group: cn=compat,dc=example,dc=com
+    schema-compat-container-rdn: cn=lists
+    schema-compat-entry-rdn: cn=%{cn}
+    schema-compat-entry-attribute: mail=%{cn}-list@example.com
+
+The ''schema-compat-entry-attribute'' value above reads each value of the
+''cn'' attribute from the source entry, appends ''-list@example.com'', and
+sets the result as a value of the ''mail'' attribute in the synthetic
+entry.  Our synthetic example entry now looks like this:
+
+    dn: cn=example-group,cn=lists,cn=compat,dc=boston,dc=redhat,dc=com
+    cn: example-group
+    mail: example-group-list@example.com
+    objectClass: extensibleObject
+    objectClass: top
+
+The syntax for referring to values of attributes borrows a bit from
+shell syntax, to allow default and alternate values to be used.
+
+    schema-compat-entry-attribute: manager=%{manager:-postmaster@example.com}
+
+== Functions ==
+
+The syntax for ''schema-compat-entry-attribute'' we've seen so far lets
+us create synthetic attributes with data from the source entry, and even
+rename attributes, but we can do more than that.  The format specifier
+used to build the value used can also include a number of function-like
+operators which are evaluated by the plugin.  A function's result is
+referenced used like so:
+
+    %function("argument"[,...])
+
+=== Selecting Specific Values ===
+
+The "match" function evaluates the first argument as an expression, and
+of the potentially-many values which result, attempts to select the ones
+which match a particular wildcard.  If there are no matches, the default
+expression is evaluated and its value is used.
+
+    %match(EXPRESSION,PATTERN,[DEFAULT_EXPRESSION])
+
+A variation which uses a regular expression instead of a wildcard
+expression is "regmatch".  If it doesn't matter which value gets used,
+but exactly one must be used, then the "first" function will do the job:
+
+    %first(EXPRESSION)
+
+The value which is used will the be the first in the plugin's sorting
+order.  This function can be particularly useful when you need to derive
+the synthesized entry's relative distinguished name (RDN) (with
+''schema-compat-entry-rdn''), but have only multi-valued attributes to
+work with in the source entry.
+
+=== References ===
+
+In cases where the source entry refers to other entries by their
+distinguished names, attributes from the referred-to entries can be used
+by using the ''deref'' function:
+
+    %deref(DN_ATTRIBUTE,ATTRIBUTE)
+
+The values of ATTRIBUTE in the entries named by the DN_ATTRIBUTE
+attribute in the source entry will be retrieved.  If the source entry is
+a group which refers to its members by DN, the mail addresses of each of
+the source group's members can be retrieved and used like so:
+
+    schema-compat-entry-attribute: subscriber=%deref("member","mail")
+
+=== Backward References ===
+
+In cases where the source entry is referred to (by its distinguished
+name) by other entries, attributes from the referring entries can be used
+by using the ''referred'' function:
+
+    %referred(CONTAINER_RDN,DN_ATTRIBUTE,ATTRIBUTE)
+
+The plugin will search for entries which are used as source entries for
+the named container within the same container group.  The values of
+ATTRIBUTE in the entries which refer to the source entry with their
+DN_ATTRIBUTE attribute will be retrieved.
+
+Because multiple ''schema-compat-search-base'' values can be specified
+for a given set of entries (for example, a set which reformats user
+information, gathering its input from multiple locations in your
+directory), retrieving information about where to search from the
+CONTAINER_RDN container in the same container group as the current set
+of entries (which might be a set of groups whose members list the group
+entry in their ''memberOf'' attributes) avoids having to duplicate this
+information.
+
+== The End Result ==
+
+Adding an optional default list owner and the mail addresses of the
+subscribers, our configuration entry now looks like this:
+
+    dn: cn=Group Lists, cn=Schema Compatibility, cn=plugins, cn=config
+    objectClass: top
+    objectClass: extensibleObject
+    cn: Group Lists
+    schema-compat-search-base: cn=Groups,dc=example,dc=com
+    schema-compat-search-filter: (cn=*)
+    schema-compat-container-group: cn=compat,dc=example,dc=com
+    schema-compat-container-rdn: cn=lists
+    schema-compat-entry-rdn: cn=%{cn}-list
+    schema-compat-entry-attribute: manager=%{manager:-postmaster@example.com}
+    schema-compat-entry-attribute: subscriber=%deref("member","mail")
+
+The resulting synthetic entry looks like this:
+
+    dn: cn=example-group-list,cn=lists,cn=compat,dc=boston,dc=redhat,dc=com
+    cn: example-group-list
+    objectClass: extensibleObject
+    objectClass: top
+    manager: postmaster@example.com
+    subscriber: jim@example.com
+    subscriber: dave@example.com
+
+Now, if we point our finicky mailing list manager at this section of the
+directory tree, it will like what it sees.
+
+The module also provides several other function-like operators which
+were not used in any of these examples.  They are described in the
+"format-specifiers.txt" file.

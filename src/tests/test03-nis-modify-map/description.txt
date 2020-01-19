@@ -1,0 +1,1 @@
+detect addition of new search base to map

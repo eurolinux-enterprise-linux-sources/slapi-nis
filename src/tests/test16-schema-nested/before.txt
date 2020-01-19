@@ -1,0 +1,36 @@
+dn: cn=ng,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: extensibleObject
+cn: ng
+
+dn: cn=ng1,cn=ng,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: nisNetgroup
+objectClass: top
+memberNisNetgroup: ng2
+memberNisNetgroup: ng3
+nisNetgroupTriple: (myhost.lab.com,steve_sss,oldnis.domain.com)
+nisNetgroupTriple: (guest1.vg.com,gorelock,oldnis.domain.com)
+nisNetgroupTriple: (guest2.vg.com,dev1,oldnis.domain.com)
+nisNetgroupTriple: (guest3.vg.com,dev2,oldnis.domain.com)
+nisNetgroupTriple: (nvguest1.vg.com,dev3,oldnis.domain.com)
+nisNetgroupTriple: (nvguest2.vg.com,-,oldnis.domain.com)
+nisNetgroupTriple: (nvguest3.vg.com,-,oldnis.domain.com)
+cn: ng1
+
+dn: cn=ng2,cn=ng,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: nisNetgroup
+objectClass: top
+nisNetgroupTriple: (foo.lab.domain.com,rcrow,lab.domain.com)
+nisNetgroupTriple: (-,support1,lab.domain.com)
+nisNetgroupTriple: (-,support2,lab.domain.com)
+nisNetgroupTriple: (-,support3,lab.domain.com)
+cn: ng2
+
+dn: cn=ng3,cn=ng,cn=compat,cn=accounts,dc=example,dc=com
+objectClass: nisNetgroup
+objectClass: top
+nisNetgroupTriple: (,rcrow,lab.domain.com)
+nisNetgroupTriple: (-,support1,lab.domain.com)
+nisNetgroupTriple: (-,support2,lab.domain.com)
+nisNetgroupTriple: (-,support3,lab.domain.com)
+cn: ng3
+

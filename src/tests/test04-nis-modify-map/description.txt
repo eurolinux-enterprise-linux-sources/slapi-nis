@@ -1,0 +1,1 @@
+detect removal of a search base from map

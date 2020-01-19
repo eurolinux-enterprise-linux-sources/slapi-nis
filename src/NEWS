@@ -1,0 +1,126 @@
+0.52	* Properly note in the nsslapd-pluginVersion attribute whether or
+	  not transaction support is available.
+	* Fix a pair of incorrect memcpy()-instead-of-memmove() cases which
+	  would hit us when removing maps or groups of maps (#1043546).
+0.51	* Miscellaneous fixes for bugs found during static analysis.
+	* Fix another memory leak parsing request arguments, this time
+	  in yp_all, which is exercised by ypcat.
+0.50	* If the NIS server encounters an EPIPE while attempting to
+	  communicate with the portmapper, try to reconnect before giving
+	  up on registering.
+0.49	* Add {nis,schema-compat}-ignore-subtree (ignore contents of
+	  and updates to entries under the specified subtrees) and
+	  {nis,schema-compat}-restrict-subtree settings (ignore contents
+	  of and updates to entries outside of these subtrees) settings.
+0.48	* Self-tests for new functionality and fixes for issues they found.
+0.47.7	* Fix compile errors against older versions of directory server
+	  which didn't supply slapi_escape_filter_value().
+0.47.6	* Fix compile errors without libnss_sss_idmap.
+0.47.5	* Add optional per-container schema-compat-lookup-nsswitch and
+	  schema-compat-nsswitch-min-id settings, which supplement the
+	  content of a set of compat entries with information from the
+	  system on which the directory server is running.
+0.47	* Fix memory leaks of request arguments in the NIS server.
+	* Add a sort function.
+0.46	* Fix detection of entries being modified so that they should be
+	  added to or removed from maps (part of #912673).
+	* Check SLAPI_PLUGIN_OPRETURN in postop hooks, in case the backend
+	  failed but we're being called anyway.
+0.45	* Fix dispatching for multiple connected clients (#923336).
+0.44	* Packaging and logging fixes.
+0.43	* Reintroduce support for server transactions (nhosoi).
+	* Add map defaults for shadow.byname and passwd.adjunct.byname.
+0.42	* Fix a memory leak (internal testing).
+0.41	* Log errors evaluating pad expressions in %link rather than
+	  continuing on until we hit an arithmetic exception (#810258).
+0.40	* Treat the pad values passed to %link as expressions rather than
+	  mere literal strings (part of #767372).
+0.39	* Populate the entryUSN value in entries with either the value from
+	  the source entry or the root DSE.
+	* Add a default function (part of #767372).
+0.38	* Properly escape RDN values when building compat entries (#796509).
+0.37	* Fix a compile error on systems which don't define
+	  LDAP_SCOPE_SUBORDINATE, reported by Christian Neuhold.
+0.36	* Stop yp_first/yp_next from looping indefinitely when keys get
+	  duplicated in NIS maps, at least for a single LDAP entry.
+0.35	* Add mmatch,mregmatch[i],mregsub[i] functions (part of #783274),
+	  which work like match,regmatch[i],regsub[i], but which handle
+	  and return lists of zero or more values.
+0.34	* Do entry comparisons ourselves, albeit less throughly, to avoid
+	  the worst case in pathological cases (more of #771444).
+0.33	* Actually compare pre- and post-modify entries to figure out if
+	  a change is relevant (fixes a lot of #771444).
+0.32	* Support for directory server's internal back-end transactions.
+0.31	* Fix some memory leaks.
+0.30	* Make a note of which attributes we read from any entry when
+	  evaluating data, and when we're later called for a modify request
+	  which doesn't modify any of those attributes, skip recalculating
+	  the entry contents (should make a dent in #771493).
+0.29    * Add regmatchi/regsubi formatting functions which work like
+	  regmatch/regsub, but do matching in a case-insensitive manner.
+	* Update NIS map defaults to match {CRYPT} userPassword values in a
+	  case-insensitive manner so that we also use {crypt} userPassword
+	  values.
+	* Fix inconsistencies in the NIS service stemming from using
+	  not-normalized DNs in some places where it should have used
+	  normalized DNs.
+0.28    * When building with OpenLDAP libraries, link with -lldap_r and
+	  not with -lldap (rmeggins, #769107).
+0.27    * Switch to slapi rwlocks instead of libpthread or NSPR rwlocks
+	  (the rest of #730394/730403).
+0.26    * Switch to libpthread rwlocks instead of NSPR rwlocks (part of
+	  #730394/730403).
+0.25    * Speed up building compat entries when they refer to thousands of
+	  other entries (#694623).
+0.24    * Buidl with either glibc's RPC or libtirpc.
+0.23    * Speed up building compat entries with attributes with thousands
+	  of literal values (#692690).
+0.22    * Bug fixes.
+	* Learn to build against either mozldap or openldap when building
+	  for dirsrv servers.
+0.21    * Make standalone container entries only show up in search results
+	  once.
+0.20    * Add a deref_f function which works like deref but also applies a
+	  filter before reading the target attribute from the target entry.
+0.19    * Fix a brown-paper-bag crash.
+0.18    * Check that the search base is serviced by a real backend before
+	  we'll attempt to participate in a search request.
+	* Add a deref_rf function which works like deref_r but also applies
+	  filters at each step of the way.
+	* Do the more-or-less expected thing when a schema compat group
+	  doesn't include a container RDN: assume the group DN is the only
+	  container and make it standalone.
+0.17    * Actually send portmap registrations to the right address.
+0.16    * Fix NIS server startup problem when no listening port is explicitly
+	  configured and we're using portmap instead of rpcbind (#500903).
+0.15	* Avoid returning an empty-but-valid result when %deref and %referred
+	  don't find anything, when they should be failing instead.
+0.14	* Work correctly when nsslapd-pluginEnabled is set to "off" (#499404).
+0.13	* Assorted fixes to %link() (#498432).
+0.12	* Fix a crash introduced by a bug in the fix for the previous crash.
+0.11	* Fix a crash while reading NIS maps with no entries (#497904).
+0.10	* IPv6 support for the NIS server plugin.
+	* Make the NIS server reject client requests which are too big.
+	* Make the NIS defaults use recursive attribute functions.
+	* Expanded docs, including a NEWS file.
+0.9	* Added recursive attribute dereferencing using deref_r and referred_r.
+	* Added conditional support (ifeq), and more merging functions (link,
+	  collect).
+	* More tests.
+	* Entries supplied by the Schema Compatibility plugin now provide these
+	  operational attributes:
+	  * createTimestamp
+	  * modifyTimestamp
+	  * creatorsName
+	  * modifiersName
+	  * entryDN
+	  * hasSubordinates
+0.8	* Added a quick start guide for the Schema Compatibility plugin.
+	* Tweak default format specifiers for the NIS Server plugin so that
+	  we ensure that we only ever return UID and GID values which are
+	  actually numbers.
+0.7	* Teach the NIS Server plugin to be able to produce multiple NIS
+	  map entries for a single directory server entry.
+	* Make the Schema Compatibility plugin warn if a result set is empty.
+	* Change match,regmatch,regsub to match against expressions, not just
+	  attribute names.

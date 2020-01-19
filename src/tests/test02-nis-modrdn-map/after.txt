@@ -1,0 +1,6 @@
+example.com:
+passwd.byname
+passwd.byuid
+passwd.byname
+passwd.byuid
+example2.com:

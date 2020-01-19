@@ -1,0 +1,37 @@
+# users, accounts, example.com
+dn: cn=users,cn=accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: users
+
+# tuser1, users, accounts, example.com
+dn: uid=tuser1,cn=users,cn=accounts,dc=example,dc=com
+uid: tuser1
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+objectClass: inetUser
+loginShell: /bin/sh
+gidNumber: 1003
+gecos: Tim User
+sn: User
+homeDirectory: /home/tuser1
+cn: Tim User
+uidNumber: 1101
+description: __no_upg__
+
+# tuser2, users, accounts, example.com
+dn: uid=tuser2,cn=users,cn=accounts,dc=example,dc=com
+uid: tuser2
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+objectClass: inetUser
+loginShell: /bin/sh
+gidNumber: 1004
+sn: User
+homeDirectory: /home/tuser2
+cn: Timmy User
+uidNumber: 1102
+description: __no_upg__
+

@@ -1,0 +1,32 @@
+From 92c4f4942547730efdca83501d130906eb07aeb0 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Wed, 25 Feb 2015 10:08:39 +0200
+Subject: [PATCH 3/3] Make sure default buffer for nsswitch operations is big
+ enough
+
+By default initial buffer sizes for getgrent/getgrnam/... functions
+are way small for large groups in Active Directory so make sure
+we have something reasonable for groups with hundreds or thousands members.
+---
+ src/back-sch.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 2388d2f..a4ae016 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -1443,10 +1443,7 @@ backend_search_cb(Slapi_PBlock *pb)
+ 	/* If during search of some sets we staged additional lookups, perform them. */
+ 	if (cbdata.staged != NULL) {
+ 		/* Allocate buffer to be used for getpwnam_r/getgrnam_r requests */
+-		cbdata.nsswitch_buffer_len = MAX(sysconf(_SC_GETPW_R_SIZE_MAX), sysconf(_SC_GETGR_R_SIZE_MAX));
+-		if (cbdata.nsswitch_buffer_len == -1) {
+-			cbdata.nsswitch_buffer_len = 16384;
+-		}
++		cbdata.nsswitch_buffer_len = MAX(16384, MAX(sysconf(_SC_GETPW_R_SIZE_MAX), sysconf(_SC_GETGR_R_SIZE_MAX)));
+ 		cbdata.nsswitch_buffer = malloc(cbdata.nsswitch_buffer_len);
+ 		/* Go over the list of staged requests and retrieve entries.
+ 		 * It is important to perform the retrieval *without* holding any locks to the map cache */
+-- 
+2.1.0
+

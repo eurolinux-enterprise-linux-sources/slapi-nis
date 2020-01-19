@@ -1,0 +1,84 @@
+From 52beb5e79905712a8aaabf19e52e654fc4648a94 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Fri, 15 Jan 2016 16:16:00 +0200
+Subject: [PATCH 06/12] nss: force lower case for memberUid attribute as per
+ RFC2307
+
+When memberUid attribute is generated, it has to be normalized or
+otherwise searches for members against groups in compat tree will fail.
+slapi-nis already normalizes elements of a search filter that mention
+memberUid attribute values but the original memberUid value should be
+normalized as well.
+---
+ src/back-sch-nss.c | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/src/back-sch-nss.c b/src/back-sch-nss.c
+index 16d4164..702590c 100644
+--- a/src/back-sch-nss.c
++++ b/src/back-sch-nss.c
+@@ -246,8 +246,8 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
+ 		return NULL;
+ 	}
+ 
+-	dn = backend_build_dn("uid", pwd->pw_name, container_sdn);
+-	if (dn == NULL) {
++	name = (char *) slapi_utf8StrToLower((unsigned char *) pwd->pw_name);
++	if (name == NULL) {
+ 		slapi_log_error(SLAPI_LOG_FATAL,
+ 				cbdata->state->plugin_desc->spd_id,
+ 				"error building DN for uid=%s,%s skipping\n",
+@@ -256,12 +256,22 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
+ 		return NULL;
+ 	}
+ 
++	dn = backend_build_dn("uid", name, container_sdn);
++	if (dn == NULL) {
++		slapi_log_error(SLAPI_LOG_FATAL,
++				cbdata->state->plugin_desc->spd_id,
++				"error building DN for uid=%s,%s skipping\n",
++				name, container_sdn);
++		slapi_entry_free(entry);
++		return NULL;
++	}
++
+ 	slapi_entry_add_string(entry,
+ 			       "objectClass", "top");
+ 	slapi_entry_add_string(entry,
+ 			       "objectClass", "posixAccount");
+ 	slapi_entry_add_string(entry,
+-			       "uid", pwd->pw_name);
++			       "uid", name);
+ 	slapi_entry_attr_set_uint(entry,
+ 				 "uidNumber", pwd->pw_uid);
+ 	slapi_entry_attr_set_uint(entry,
+@@ -286,6 +296,7 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
+ 	}
+ 
+ 	slapi_entry_set_dn(entry, dn);
++	slapi_ch_free_string(&name);
+ 
+ #ifdef HAVE_SSS_NSS_IDMAP
+ 	rc = sss_nss_getsidbyid(pwd->pw_uid, &sid_str, &id_type);
+@@ -520,6 +531,7 @@ backend_make_group_entry_from_nsswitch_group(struct group *grp,
+ 	Slapi_Entry *entry;
+ 	int rc, i;
+ 	char *dn = NULL;
++	char *name = NULL;
+ #ifdef HAVE_SSS_NSS_IDMAP
+ 	enum sss_id_type id_type;
+ 	char *sid_str;
+@@ -551,7 +563,9 @@ backend_make_group_entry_from_nsswitch_group(struct group *grp,
+ 
+ 	if (grp->gr_mem) {
+ 		for (i=0; grp->gr_mem[i]; i++) {
+-			slapi_entry_add_string(entry, "memberUid", grp->gr_mem[i]);
++			name = (char *) slapi_utf8StrToLower((unsigned char*) grp->gr_mem[i]);
++			slapi_entry_add_string(entry, "memberUid", name);
++			slapi_ch_free_string(&name);
+ 		}
+ 	}
+ 
+-- 
+2.5.0
+

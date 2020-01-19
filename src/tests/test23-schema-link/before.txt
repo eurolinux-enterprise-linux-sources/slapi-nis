@@ -1,0 +1,38 @@
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+dn: cn=example,cn=compat,cn=accounts,dc=example,dc=com
+
+dn: uid=user1,cn=example,cn=compat,cn=accounts,dc=example,dc=com
+thingy: -,user1,user1,user1|user1
+thingy: -,-,user1,user1|user1
+thingy: -,-,-,user1|user1
+
+dn: uid=user1a,cn=example,cn=compat,cn=accounts,dc=example,dc=com
+thingy: -,user1a,user1a,user1a|user1a
+thingy: -,-,user1a,user1a|user1a
+thingy: -,-,-,user1a|user1a
+
+dn: uid=user1b,cn=example,cn=compat,cn=accounts,dc=example,dc=com
+thingy: -,user1b,user1b,user1b|user1b
+thingy: -,-,user1b,user1b|user1b
+thingy: -,-,-,user1b|user1b
+
+dn: uid=user1c,cn=example,cn=compat,cn=accounts,dc=example,dc=com
+thingy: -,user1c,user1c,user1c|user1c
+thingy: -,-,user1c,user1c|user1c
+thingy: -,-,-,user1c|user1c
+
+dn: cn=compat2,cn=accounts,dc=example,dc=com
+
+dn: cn=example,cn=compat2,cn=accounts,dc=example,dc=com
+
+dn: uid=group1-fake-uid,cn=example,cn=compat2,cn=accounts,dc=example,dc=com
+thingy: -,group1-fake-uid,group1-fake-uid,group1-fake-uid
+thingy: -,group1,group1-fake-uid,group1-fake-uid
+thingy: -,group1,group1,group1-fake-uid
+
+dn: uid=group2-fake-uid,cn=example,cn=compat2,cn=accounts,dc=example,dc=com
+thingy: -,group2-fake-uid,group2-fake-uid,group2-fake-uid
+thingy: -,group2-alternate-name,group2-fake-uid,group2-fake-uid
+thingy: -,group2,group2,group2-fake-uid
+

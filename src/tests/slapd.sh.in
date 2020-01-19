@@ -1,0 +1,140 @@
+#!/bin/bash
+SLAPD=@SLAPD@
+TESTDIR=@abs_srcdir@
+BTESTDIR=@abs_builddir@
+STATEDIR=@abs_builddir@/state
+
+YP="@abs_builddir@/clients/yp -p @test_nisport@"
+export YP
+LDIFSORT="@abs_builddir@/clients/ldifsort"
+export LDIFSORT
+VALGRIND="valgrind --leak-check=full --log-file=valgrind.log --num-callers=50 --track-origins=yes --show-reachable=yes --suppressions=@abs_srcdir@/slapi-nis.supp --gen-suppressions=all"
+
+TESTS_USE_REFINT=@TESTS_USE_REFINT@
+TESTS_USE_MEMBEROF=@TESTS_USE_MEMBEROF@
+PORT=@test_ldapport@
+export PORT
+PW=password
+export PW
+simplebind() {
+	ldapsearch -h localhost -p $PORT -x -b '' -s base dn: "$@"
+}
+add() {
+	ldapadd -h localhost -p $PORT -x -D "cn=Directory Manager" -w $PW "$@"
+}
+modify() {
+	ldapmodify -h localhost -p $PORT -x -D "cn=Directory Manager" -w $PW "$@"
+}
+modrdn() {
+	ldapmodrdn -h localhost -p $PORT -x -D "cn=Directory Manager" -w $PW "$@"
+}
+delete() {
+	ldapdelete -h localhost -p $PORT -x -D "cn=Directory Manager" -w $PW "$@"
+}
+search() {
+	ldapsearch -h localhost -p $PORT -x -D "cn=Directory Manager" -w $PW "$@"
+}
+compare() {
+	ldapcompare -h localhost -p $PORT -x -D "cn=Directory Manager" -w $PW "$@"
+}
+export -f simplebind add modify modrdn delete search compare
+
+stopslapd() {
+	if test -s $STATEDIR/pid ; then
+		pid=`cat $STATEDIR/pid`
+		kill -s HUP $pid 2> /dev/null
+		sleep 1
+		if kill -s 0 $pid 2> /dev/null ; then
+			kill $pid 2> /dev/null
+			sleep 1
+			if kill -s 0 $pid 2> /dev/null ; then
+				kill -s 9 $pid 2> /dev/null
+				sleep 1
+			fi
+		fi
+		if ! kill -s 0 $pid 2> /dev/null ; then
+			rm -f $STATEDIR/pid
+		fi
+	fi
+}
+startslapd() {
+	stopslapd
+	rm -rf $STATEDIR/db
+	local subdir=
+	for subdir in bak db/userRoot ldif lock log tmp run ; do
+		test -d $STATEDIR/$subdir || mkdir -p $STATEDIR/$subdir
+	done
+	test -s $BTESTDIR/config/schema/00core.ldif || ln -s -t $BTESTDIR/config $TESTDIR/config/schema
+	cat $BTESTDIR/config/dse.ldif.initial > $BTESTDIR/config/dse.ldif
+	if ! test -s $TESTDIR/$TEST/plugin-skip-refint.txt ; then
+		cat $BTESTDIR/config/dse.ldif.refint >> $BTESTDIR/config/dse.ldif
+	fi
+	if ! test -s $TESTDIR/$TEST/plugin-skip-memberof.txt ; then
+		cat $BTESTDIR/config/dse.ldif.memberof >> $BTESTDIR/config/dse.ldif
+	fi
+	if ! test -s $TESTDIR/$TEST/plugin-skip-mep.txt ; then
+		cat $BTESTDIR/config/dse.ldif.mep >> $BTESTDIR/config/dse.ldif
+	fi
+	if ! test -s $TESTDIR/$TEST/plugin-skip-usn.txt ; then
+		cat $BTESTDIR/config/dse.ldif.usn >> $BTESTDIR/config/dse.ldif
+	fi
+	process_all=0
+	if test -s $TESTDIR/$TEST/plugin-process-all.txt ; then
+		process_all=1
+	fi
+	if test -n "$1" && test -s "$1" ; then
+		cat "$1" >> $BTESTDIR/config/dse.ldif
+	fi
+	if test -x $TESTDIR/$TEST/edit-dse-config.sh ; then
+		if ! $TESTDIR/$TEST/edit-dse-config.sh $BTESTDIR/config/dse.ldif ; then
+			echo ERROR: failed to edit dse.ldif before starting server.
+			exit 1
+		fi
+	fi
+	old_ld_preload="$LD_PRELOAD"
+	if test -s $TESTDIR/$TEST/plugin-need-wrappers.txt ; then
+		ENVCMD="`cat $TESTDIR/$TEST/plugin-need-wrappers.txt`"
+		ENVCMD=env\ `eval echo $ENVCMD`
+		LD_PRELOAD=$BTESTDIR/wrappers.so${LD_PRELOAD:+:$LD_PRELOAD}
+		export LD_PRELOAD
+	else
+		ENVCMD=
+		LD_PRELOAD="$old_ld_preload"
+		if test -n "$LD_PRELOAD" ; then
+			export LD_PRELOAD
+		else
+			export -n LD_PRELOAD
+		fi
+	fi
+	@NIS_PLUGIN_CONTINUE_WITHOUT_PORTMAP_ENV@=1 \
+	@NIS_PLUGIN_PROCESS_UNINTERESTING_UPDATES_ENV@=$process_all \
+	@SCHEMA_COMPAT_PLUGIN_PROCESS_UNINTERESTING_UPDATES_ENV@=$process_all \
+	$ENVCMD @TRACE_CMD@ \
+	$SLAPD -D $BTESTDIR/config -i $STATEDIR/pid -w $STATEDIR/pid
+	LD_PRELOAD="$old_ld_preload"
+	if test -n "$LD_PRELOAD" ; then
+		export LD_PRELOAD
+	else
+		export -n LD_PRELOAD
+	fi
+	if ! add -f $BTESTDIR/config/userRoot.ldif > /dev/null 2> /dev/null ; then
+		local i
+		local max=60
+		for i in `seq $max` ; do
+			sleep 1
+			if add -f $TESTDIR/config/userRoot.ldif > /dev/null 2> /dev/null ; then
+				break
+			fi
+		done
+		if test $i -eq $max ; then
+			echo ERROR: failed to add default entry set to server.
+			exit 1
+		fi
+	fi
+	if test -n "$2" && test -s "$2" ; then
+		if ! add -f "$2" > /dev/null 2> /dev/null ; then
+			echo ERROR: failed to add test-specific entries to server.
+			exit 1
+		fi
+	fi
+}

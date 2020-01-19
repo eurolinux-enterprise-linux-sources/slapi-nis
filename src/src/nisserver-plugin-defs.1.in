@@ -1,0 +1,37 @@
+.TH nisserver-plugin-defs 1 2011/04/19 "slapi-nis" "System Administrator's Manual"
+
+.SH NAME
+nisserver-plugin-defs \- print default settings for the NIS server plugin
+
+.SH SYNOPSIS
+nisserver-plugin-defs [-d \fIdomain\fP ] [-m \fImap\fP ] [-s \fIsuffix\fP ]
+
+.SH DESCRIPTION
+The \fInisserver-plugin-defs\fP command produces example configuration entries
+containing the default settings which the NIS server plugin will use for all
+maps for which it has built-in defaults, or if a particular map name is
+specified, for one map.
+
+.SH ARGUMENTS
+.TP
+-d DOMAIN
+By default, \fInisserver-plugin-defs\fP uses a placeholder for the NIS domain
+name when it prints example configuration entries.  This option allows a
+particular domain name to be specified.
+.TP
+-m MAP
+By default, \fInisserver-plugin-defs\fP prints example configuration entries
+for all of the maps for which it has built-in defaults.  This option can be
+used to examine the defaults associated with a particular map name.
+.TP
+-s SUFFIX
+By default, \fInisserver-plugin-defs\fP uses a placeholder for the base DN
+under which it expects to find entries which are relevant for the map.  This
+option allows a particular search base to be specified.
+
+.SH BUGS
+Probably, but let's hope not.  If you find any, please file them in the
+bug database at http://slapi-nis.fedorahosted.org/.
+
+.SH AUTHOR
+Nalin Dahyabhai <nalin@redhat.com>

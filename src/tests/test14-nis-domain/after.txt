@@ -1,0 +1,12 @@
+domain example.com
+TRUE
+domain example2.com
+FALSE
+maplist 1 example.com
+passwd.byname
+passwd.byuid
+maplist 2 example.com
+passwd.byname
+passwd.byuid
+maplist 1 example2.com
+maplist 2 example2.com

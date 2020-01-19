@@ -1,0 +1,105 @@
+From 3aaf4941fc17df388c43776eda6d41f62017a143 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Fri, 15 Jan 2016 17:17:23 +0200
+Subject: [PATCH 09/12] slapi-nis: serialize map cache initialization
+
+Serialize process of initiliazing map cache to avoid locking the
+directory server backends.
+---
+ src/back-shr.c | 55 +++++++++++++++++++++++++++++++++++++------------------
+ 1 file changed, 37 insertions(+), 18 deletions(-)
+
+diff --git a/src/back-shr.c b/src/back-shr.c
+index 131365d..0157582 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -678,49 +678,68 @@ backend_shr_data_initialize_thread_cb(void *arg)
+ 	struct backend_shr_data_init_cbdata *cbdata = (struct backend_shr_data_init_cbdata *)arg;
+ 	Slapi_PBlock *pb = NULL;
+ 	struct backend_set_config_entry_add_cbdata set_cbdata;
+-	int result = 0;
++	int result = 0, i = 0;
++	Slapi_Entry **entries = NULL;
++	struct plugin_state *state = NULL;
++
+ 	if (cbdata == NULL) {
+ 		return;
+ 	}
+ 
++	state = cbdata->state;
++
+ 	/* Scan may require consulting SSSD for external identities
+ 	 * therefore, we need to make sure the scan starts after ns-slapd
+ 	 * started to serve LDAP clients. There is no a signal for this,
+ 	 * so we just wait some time. */
+ 	DS_Sleep(PR_SecondsToInterval(PLUGIN_SCAN_DELAY));
+ 
+-	backend_update_params(cbdata->parent_pb, cbdata->state);
++	backend_update_params(cbdata->parent_pb, state);
+ 
+ 	slapi_log_error(SLAPI_LOG_PLUGIN,
+-			cbdata->state->plugin_desc->spd_id,
++			state->plugin_desc->spd_id,
+ 			"searching under \"%s\" for configuration\n",
+-			cbdata->state->plugin_base);
++			state->plugin_base);
+ 	pb = wrap_pblock_new(cbdata->parent_pb);
+ 	slapi_search_internal_set_pb(pb,
+-				     cbdata->state->plugin_base,
++				     state->plugin_base,
+ 				     LDAP_SCOPE_ONELEVEL,
+ 				     cbdata->filter,
+ 				     NULL, FALSE,
+ 				     NULL,
+ 				     NULL,
+-				     cbdata->state->plugin_identity,
++				     state->plugin_identity,
+ 				     0);
+-	if (map_wrlock() != 0) {
+-		slapi_log_error(SLAPI_LOG_PLUGIN,
+-				cbdata->state->plugin_desc->spd_id,
++	wrap_inc_call_level();
++	set_cbdata.state = state;
++	set_cbdata.pb = pb;
++
++	/* Do a search and collect found entries to avoid locking the backends */
++	if (slapi_search_internal_pb(pb) == 0) {
++		if (map_wrlock() != 0) {
++			slapi_log_error(SLAPI_LOG_PLUGIN,
++				state->plugin_desc->spd_id,
+ 				"failed to search under \"%s\" for "
+ 				"configuration: failed to acquire a lock\n",
+-				cbdata->state->plugin_base);
+-		goto done_with_lock;
++				state->plugin_base);
++			goto done_with_lock;
++		}
++		slapi_pblock_get(pb, SLAPI_PLUGIN_INTOP_RESULT, &result);
++		if (result == 0) {
++			slapi_pblock_get(pb, SLAPI_PLUGIN_INTOP_SEARCH_ENTRIES, &entries);
++			for (i = 0; entries[i] != NULL; i++) {
++				backend_set_config_entry_add_cb(entries[i], &set_cbdata);
++			}
++		}
++		map_unlock();
++		slapi_free_search_results_internal(pb);
+ 	}
+-	set_cbdata.state = cbdata->state;
+-	set_cbdata.pb = pb;
+-	slapi_search_internal_callback_pb(pb, &set_cbdata,
+-					  NULL,
+-					  backend_set_config_entry_add_cb,
+-					  NULL);
+-	map_unlock();
++	slapi_log_error(SLAPI_LOG_FATAL,
++			state->plugin_desc->spd_id,
++			"Finished plugin initialization.\n");
++
+ done_with_lock:
++	wrap_dec_call_level();
+ 	slapi_pblock_destroy(pb);
+         if (cbdata) {
+ 		slapi_ch_free((void**)&cbdata);
+-- 
+2.5.0
+

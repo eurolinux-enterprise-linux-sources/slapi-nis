@@ -1,0 +1,60 @@
+dn: cn=Schema Compatibility, cn=plugins, cn=config
+objectclass: top
+objectclass: nsSlapdPlugin
+objectclass: extensibleObject
+cn: Schema Compatibility
+nsslapd-pluginpath: @myplugindir@/schemacompat-plugin.so
+nsslapd-plugininitfunc: schema_compat_plugin_init
+nsslapd-plugintype: object
+nsslapd-pluginenabled: on
+nsslapd-pluginid: schema-compat-plugin
+nsslapd-pluginversion: @PACKAGE_VERSION@
+nsslapd-pluginvendor: redhat.com
+nsslapd-plugindescription: Schema Compatibility Plugin
+
+dn: ou=people, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+ou: people
+schema-compat-container-group: cn=compat, @mysuffix@
+schema-compat-container-rdn: ou=people
+schema-compat-search-base: @people@, @mysuffix@
+schema-compat-search-filter: objectclass=posixAccount
+schema-compat-entry-rdn: uid=%{uid}
+schema-compat-entry-attribute: objectclass=posixAccount
+schema-compat-entry-attribute: gecos=%{cn}
+schema-compat-entry-attribute: cn=%{cn}
+schema-compat-entry-attribute: uidNumber=%{uidNumber}
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: loginShell=%{loginShell}
+schema-compat-entry-attribute: homeDirectory=%{homeDirectory}
+
+dn: ou=group, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+ou: group
+schema-compat-container-group: cn=compat, @mysuffix@
+schema-compat-container-rdn: ou=group
+schema-compat-search-base: @groups@, @mysuffix@
+schema-compat-search-filter: objectclass=posixGroup
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=posixGroup
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: memberUid=%{memberUid}
+schema-compat-entry-attribute: memberUid=%deref_r("member","uid")
+schema-compat-entry-attribute: memberUid=%referred("ou=people","memberOf","uid")
+schema-compat-entry-attribute: memberUid=%referred_r("ou=group","memberOf","ou=people","memberOf","uid")
+
+dn: ou=upgroup, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectClass: extensibleObject
+ou: upgroup
+schema-compat-container-group: cn=compat, @mysuffix@
+schema-compat-container-rdn: ou=upgroup
+schema-compat-search-base: @people@, @mysuffix@
+schema-compat-search-filter: objectclass=posixAccount
+schema-compat-entry-rdn: cn=%{uid}
+schema-compat-entry-attribute: objectclass=posixGroup
+schema-compat-entry-attribute: gidNumber=%{uidNumber}
+schema-compat-entry-attribute: memberUid=%{uid}
+

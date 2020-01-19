@@ -1,0 +1,39 @@
+dn: cn=compat-passwd,cn=Schema Compatibility,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: compat-passwd
+schema-compat-container-group: cn=compat,cn=Accounts,dc=example,dc=com
+schema-compat-container-rdn: cn=Users
+schema-compat-lookup-nsswitch: user
+schema-compat-nsswitch-min-id: 0
+schema-compat-check-access: yes
+schema-compat-search-base: cn=Users,cn=Accounts,dc=example,dc=com
+schema-compat-search-filter: (|(objectClass=extensibleObject)(objectClass=posixAccount))
+schema-compat-entry-rdn: uid=%{uid}
+schema-compat-entry-attribute: objectclass=posixAccount
+schema-compat-entry-attribute: uidNumber=%{uidNumber}
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: homeDirectory=%{homeDirectory}
+schema-compat-entry-attribute: loginShell=%{loginShell}
+schema-compat-entry-attribute: cn=%{cn}
+schema-compat-entry-attribute: gecos=%{gecos:-%{cn}}
+schema-compat-entry-attribute: userPassword=%{userPassword}
+
+dn: cn=compat-group,cn=Schema Compatibility,cn=plugins,cn=config
+objectClass: top
+objectClass: extensibleObject
+cn: compat-group
+schema-compat-container-group: cn=compat,cn=Accounts,dc=example,dc=com
+schema-compat-container-rdn: cn=Groups
+schema-compat-lookup-nsswitch: group
+schema-compat-nsswitch-min-id: 0
+schema-compat-check-access: yes
+schema-compat-search-base: cn=Groups,cn=Accounts,dc=example,dc=com
+schema-compat-search-filter: (|(objectClass=extensibleObject)(objectClass=posixAccount))
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=posixGroup
+schema-compat-entry-attribute: userPassword=%{userPassword}
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: memberUid=%deref_r("member","uid")
+schema-compat-entry-attribute: memberUid=%{memberUid}
+

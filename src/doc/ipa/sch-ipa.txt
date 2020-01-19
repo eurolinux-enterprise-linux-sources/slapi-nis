@@ -1,0 +1,182 @@
+= The Schema Compatibility Plugin in IPA =
+
+RFC 2307 defines object classes and attributes suitable for representing
+various POSIX-related information in a directory.  The "posixGroup"
+object class, for example, models a group of accounts, including the
+POSIX group's ID (as the value of the "gidNumber" attribute) and the
+names of each of the members of the group (as values of the "memberUid"
+attribute).
+
+This representation is supported by the native LDAP client software
+supplied with a number of Unix and Unix-like operating systems.
+
+The draft revision of RFC 2307, known as "rfc2307bis", modifies the
+contents of a group so that it no longer contains the names of its
+members in the "memberUid" attribute, but rather uses the "member"
+attribute to list the distinguished names of the entries which represent
+the individual members.  A client is typically expected to search the
+named entries to determine the names of the group's member users.
+
+It is this representation of groups which FreeIPA and RHEIPA use.
+
+This representation is not as well-supported by the native LDAP client
+software supplied with Unix and Unix-like operating systems.
+
+When configured to consult a server which stores information this way, a
+client which does not support reading group membership from the "member"
+attribute will still able to look up a group and read its name and ID,
+but will be unable to "see" the members of the group.
+
+For these clients, an IPA server can be configured to use the Schema
+Compatibility Plugin to resolve the group membership at the server.  The
+plugin will examine the group entries stored in the server and, as
+configured, read the distinguished names of the members of those groups.
+It will examine the named entries and read from them the names of the
+members of the group.  It will then use that data to create an in-memory
+entry, elsewhere in the directory tree, which contains the group
+membership information in a form which the client is able to process.
+
+As configured, an IPA server provides this information, for groups whose
+entries are beneath "cn=groups, cn=accounts, $SUFFIX", in an area
+beneath "cn=groups, cn=compat, $SUFFIX".
+
+= The Schema Compatibility Plugin support for trusted domains in IPA =
+
+When used with FreeIPA 3.3 and SSSD 1.11 or later, the Schema Compatibility
+Plugin allows to expose users and groups from trusted domains. These users
+and groups are available on the compatibility trees and can be used for
+querying their attributes and authenticating against them.
+
+Additionally, authentication against IPA users is also supported, provided
+that the Schema Compatibility Plugin is given an ordering preference in
+the Directory Server configuration. By default, all Directory server plugins
+are assigned plugin precedence of 50 (out of 1..99 scale, where 99 is the lowest
+priority). The plugin precedence is controlled with nsslapd-pluginPrecedence
+attribute in the plugin entry. More details on nsslapd-PluginPrecedence are
+available in Red Hat Directory Server Administration Guide, chapter "1.8 Using
+Directory Server Plug-ins".
+
+== Configuration of the Schema Compatibility Plugin for trusted domains ==
+
+User and groups areas should be configured separately. For each area following
+parameters can be added in the tree configuration:
+
+schema-compat-lookup-nsswitch: <user|group>
+
+specifies that the area is responsible for user or group lookups.
+
+schema-compat-nsswitch-min-id: <value>
+
+specifies that the minimal numeric id of the user or group should be not less
+than the value. Defaults to 1000.
+
+When FreeIPA 3.3 is in use, ipa-adtrust-install utility will automatically configure
+the Schema Compatibility Plugin to allow serving users and groups from trusted domains.
+No additional configuration is needed. ipa-adtrust-install, however, will not set the
+minimal numeric id for user or group.
+
+== Authentication of the trusted domains' users ==
+
+When the Schema Compatibility Plugin is configured to expose users from trusted
+domains, their authentication is handled via PAM 'system-auth' service. This
+service exists by default on Linux  systems and is provided by pam package as
+/etc/pam.d/system-auth. If your FreeIPA install does not have default HBAC rule
+'allow_all' enabled, then make sure to define in IPA a special service called
+'system-auth' and create an HBAC rule to allow access to anyone to this rule
+on  IPA masters.
+
+As 'system-auth' PAM service is not used directly by any other application, it
+is safe to use it for trusted domain users via compatibility path.
+
+== Support for ID views ==
+
+When FreeIPA 4.1 is in use, Schema compatibility plugin can be configured to
+override POSIX attributes according to an identity view (ID View) which
+contains overrides for users and groups.
+
+The overrides are managed by FreeIPA separately for users and groups:
+
+* management of ID views:
+  ipa idview-add 'my view'
+
+* management of an override for a user:
+  ipa idoverrideuser-add 'my view' auser --login=foo --shell=/bin/ksh \
+                                         --homedir=/home/foo --uid=12345
+
+* management of an override for a group:
+  ipa idoverridegroup-add 'my view' agroup --group-name=bgroup --gid=54321
+
+FreeIPA transparently supports overrides for users and groups from trusted AD
+domains.  This means that for trusted domains, IPA doesn't require to place
+POSIX attributes in Active Directory. Instead, a global ID view named 'Default
+Trust View' is used to contain POSIX attributes for existing AD users.
+Additionally, specialized ID views can be added on top of the 'Default Trust
+View' and then assigned to specific hosts.
+
+Schema compatibility plugin does support ID overrides from a single view. The
+feature is designed to allow host-specific ID view, where the view is specified
+through the search base.
+
+For native IPA users default POSIX attributes are stored natively, thus only a
+host-specific ID view is applied, if any. For trusted AD users 'Default Trust
+View' ID view is applied automatically by SSSD running on the IPA master, thus
+Schema compatibility plugin only applies a host-specific ID view, if specified.
+
+In FreeIPA Schema compatibility is configured to serve entries through the
+host-specific ID view with base DN of cn=<ID view>,cn=views,cn=compat,$SUFFIX.
+
+=== ID views implementation ===
+Detailed design of ID views in FreeIPA can be seen here:
+http://www.freeipa.org/page/V4/Migrating_existing_environments_to_Trust
+
+In Schema compatibility plugin support for ID views is done on top of existing
+map cache. It is expected that there are less overrides than non-overridden
+entries for IPA users and groups. For trusted AD users POSIX attributes from
+'Default Trust View' are applied by SSSD on IPA master. Thus, if there are no
+host-specific overrides, trusted AD users treated by Schema compatibility
+plugin as before -- as entries which content comes from nssswitch API.
+
+This approach allows to only keep original entry in the memory and apply
+host-specific override only at the time when entry with explicitly requested ID
+view is returned as part of a search result.
+
+In order to map original entry to an override, FreeIPA configuration for Schema
+compatibility plugin adds ipaAnchorUUID attribute and ipaOverrideTarget object
+class to every generated entry. ipaAnchorUUID is based on ipaUniqueID for IPA
+objects and on SID for trusted AD objects:
+
+* ipaAnchorUUID=:IPA:<domain>:<ipaUniqueID> for IPA object (user, group)_
+
+* ipaAnchorUUID=:SID:<SID> for trusted AD user or group
+
+For ID overrides FreeIPA maintains ipaAnchorUUID with the same value so that an
+override can be found by simple matching of the ipaAnchorUUID attribute's
+value. FreeIPA also stores original uid value for user objects in ID override
+as ipaOriginalUid attribute, to allow mapping back memberUid values for groups.
+
+When a query request comes, the view in the base DN is detected and remembered.
+Base DN is rewritten to exclude the cn=<ID view>,cn=views so that a normal
+search can be performed against cached entries. Additionally, search filter is
+analyzed to replace references to rewritten uid (for user) and cn (for group)
+attributes by references to the original objects. The references come from the
+ID view overrides, if they exist.
+
+Once search results are gathered for the map, they are processed in order to
+apply an override.  For users entry attributes overridden with the values from
+an override. For groups additional processing is performed on values of
+memberUid attribute.
+
+As opposed to member attribute, memberUid attribute contains only values of uid
+attribute of the original member entry.  Given that an ID override may redefine
+uid value, corresponding memberUid value of a group needs to be rewritten to
+include redefined uid value. In order to do that, original memberUid value is
+compared with ipaOriginalUid attribute's value to find an override
+corresponding to the original user object. If such override is detected, memberUid
+value is replaced by the uid value of the override.
+
+When attributes of the entry are processed and optionally amended with overridden
+values, DN of the entry is rewritten as well, to reflect the fact that entry is
+served through the view.
+
+For all returned entries ipaAnchorUUID attribute and ipaOverrideTarget objectclass
+are removed. Resulting entry is sent to the client.

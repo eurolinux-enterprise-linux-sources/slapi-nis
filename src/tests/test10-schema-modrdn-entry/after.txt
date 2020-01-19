@@ -1,0 +1,5 @@
+dn: cn=compat,cn=accounts,dc=example,dc=com
+dn: ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: uid=user1a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: uid=user1c,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com
+dn: uid=user3a,ou=passwd,cn=compat,cn=accounts,dc=example,dc=com

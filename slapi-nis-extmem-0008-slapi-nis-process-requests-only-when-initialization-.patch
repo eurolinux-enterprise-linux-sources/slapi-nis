@@ -1,0 +1,150 @@
+From 594fcb2320033d01cfe2b8121793d431d1017987 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Fri, 15 Jan 2016 16:39:12 +0200
+Subject: [PATCH 08/12] slapi-nis: process requests only when initialization
+ completed
+
+Initializing map cache may take time. Skip slapi-nis lookups untli
+the map cache is ready.
+---
+ src/back-sch.c | 23 ++++++++++++++++++++++-
+ src/back-shr.c | 20 ++++++++++++++++++++
+ src/plugin.h   |  1 +
+ 3 files changed, 43 insertions(+), 1 deletion(-)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 04fe667..871734c 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -1609,7 +1609,7 @@ backend_search_cb(Slapi_PBlock *pb)
+ {
+ 	struct backend_search_cbdata cbdata;
+ 	struct backend_staged_search *staged, *next;
+-	int i;
++	int i, isroot;
+ 
+ 	if (wrap_get_call_level() > 0) {
+ 		return 0;
+@@ -1621,6 +1621,19 @@ backend_search_cb(Slapi_PBlock *pb)
+ 		/* The plugin was not actually started. */
+ 		return 0;
+ 	}
++	if (cbdata.state->ready_to_serve == 0) {
++		/* No data to serve yet */
++		return 0;
++	}
++
++	slapi_pblock_get(pb, SLAPI_REQUESTOR_ISROOT, &isroot);
++
++	if (slapi_op_internal(pb) || (slapi_is_ldapi_conn(pb) && isroot)) {
++		/* The plugin should not engage in internal searches of other
++		 * plugins or ldapi+cn=DM */
++		return 0;
++	}
++
+ 	slapi_pblock_get(pb, SLAPI_SEARCH_TARGET, &cbdata.target);
+ 	slapi_pblock_get(pb, SLAPI_SEARCH_SCOPE, &cbdata.scope);
+ 	slapi_pblock_get(pb, SLAPI_SEARCH_SIZELIMIT, &cbdata.sizelimit);
+@@ -2018,6 +2031,10 @@ backend_write_cb(Slapi_PBlock *pb, struct plugin_state *state)
+ 	if (wrap_get_call_level() > 0) {
+ 		return 0;
+ 	}
++	if (state->ready_to_serve == 0) {
++		/* No data to serve yet */
++		return 0;
++	}
+ 
+ 	wrap_inc_call_level();
+ 	if (map_rdlock() == 0) {
+@@ -2125,6 +2142,10 @@ backend_bind_cb(Slapi_PBlock *pb)
+ 	}
+ 
+ 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
++	if (state->ready_to_serve == 0) {
++		/* No data to serve yet */
++		return 0;
++	}
+ 	/* The code below handles three separate facts:
+ 	 * 1. For NSSWITCH-discovered users PAM is responsible for authentication.
+ 	 *    We want to run PAM auth without any slapi-nis lock taken to avoid
+diff --git a/src/back-shr.c b/src/back-shr.c
+index 36ecc0b..131365d 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -725,6 +725,8 @@ done_with_lock:
+         if (cbdata) {
+ 		slapi_ch_free((void**)&cbdata);
+         }
++
++	PR_AtomicSet(&state->ready_to_serve, 1);
+ }
+ 
+ static void
+@@ -769,6 +771,7 @@ backend_shr_startup(struct plugin_state *state,
+ 		return;
+ 	}
+ 
++	PR_AtomicSet(&state->ready_to_serve, 0);
+ 	cbdata->state = state;
+ 	cbdata->parent_pb = parent_pb;
+ 	cbdata->filter = filter;
+@@ -1798,6 +1801,11 @@ backend_shr_add_cb(Slapi_PBlock *pb)
+ 		/* The plugin was not actually started. */
+ 		return 0;
+ 	}
++	if (cbdata.state->ready_to_serve == 0) {
++		/* No data yet, ignore */
++		return 0;
++	}
++
+ 	slapi_pblock_get(pb, SLAPI_ENTRY_POST_OP, &cbdata.e);
+ 	slapi_pblock_get(pb, SLAPI_ADD_TARGET, &dn);
+ 	slapi_pblock_get(pb, SLAPI_PLUGIN_OPRETURN, &rc);
+@@ -2208,6 +2216,10 @@ backend_shr_modify_cb(Slapi_PBlock *pb)
+ 		/* The plugin was not actually started. */
+ 		return 0;
+ 	}
++	if (cbdata.state->ready_to_serve == 0) {
++		/* No data yet, ignore */
++		return 0;
++	}
+ 	slapi_pblock_get(pb, SLAPI_MODIFY_TARGET, &dn);
+ 	slapi_pblock_get(pb, SLAPI_MODIFY_MODS, &cbdata.mods);
+ 	slapi_pblock_get(pb, SLAPI_ENTRY_PRE_OP, &cbdata.e_pre);
+@@ -2410,6 +2422,10 @@ backend_shr_modrdn_cb(Slapi_PBlock *pb)
+ 		/* The plugin was not actually started. */
+ 		return 0;
+ 	}
++	if (cbdata.state->ready_to_serve == 0) {
++		/* No data yet, ignore */
++		return 0;
++	}
+ 	slapi_pblock_get(pb, SLAPI_ENTRY_PRE_OP, &cbdata.e_pre);
+ 	slapi_pblock_get(pb, SLAPI_ENTRY_POST_OP, &cbdata.e_post);
+ 
+@@ -2549,6 +2565,10 @@ backend_shr_delete_cb(Slapi_PBlock *pb)
+ 		/* The plugin was not actually started. */
+ 		return 0;
+ 	}
++	if (cbdata.state->ready_to_serve == 0) {
++		/* No data yet, ignore */
++		return 0;
++	}
+ 	slapi_pblock_get(pb, SLAPI_ENTRY_PRE_OP, &cbdata.e);
+ 	slapi_pblock_get(pb, SLAPI_DELETE_TARGET, &dn);
+ 	slapi_pblock_get(pb, SLAPI_PLUGIN_OPRETURN, &rc);
+diff --git a/src/plugin.h b/src/plugin.h
+index 429e291..7a89ac7 100644
+--- a/src/plugin.h
++++ b/src/plugin.h
+@@ -33,6 +33,7 @@ struct plugin_state {
+ 	Slapi_ComponentId *plugin_identity;
+ 	Slapi_PluginDesc *plugin_desc;
+ 	unsigned int use_be_txns: 1;
++	PRInt32 ready_to_serve;
+ 
+ 	/* NIS-specific data. */
+ 	struct wrapped_thread *tid;
+-- 
+2.5.0
+

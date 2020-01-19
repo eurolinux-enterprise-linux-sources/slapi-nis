@@ -1,0 +1,80 @@
+From 5eaad9c4c218d9a59f6930a29f5bee54235c4fab Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 19 Jan 2016 07:37:46 +0200
+Subject: [PATCH 10/12] nis: lock out accounts if nsAccountLock is TRUE
+
+Add a rule that adds two bang characters in front of the password.
+
+When the password algorithm is defined as CRYPT and NIS is used to
+authenticate users on other systems, there is no way to disable or lock
+accounts. Traditional convention has been to put two bang (exclamation)
+characters in front of the password, creating an impossible password
+hash. This effectively locks the user account, preventing
+authentication.
+
+All UNIX systems agree that for encrypted passwords presence of a
+character which cannot be part of CRYPT password scheme renders
+impossible to login to system with such password. However, not all
+systems have meaning of locked accounts and even how these locked
+accounts express themselves.
+
+There is certain controversy in what could be used to indicate locked
+accounts:
+ - GNU/Linux systems expect '!' as first character of the password field
+ - FreeBSD expects '*LOCKED*' string at start of the password field
+ - Various Solaris versions expect '*LOCK*' string at start of the
+   password field
+ - NetBSD has no meaning of locked passwords via content of password field
+
+Given that it is impossible to serve NIS maps with encrypted passwords
+in a different way to different clients, standardize on '!!' scheme as
+traditional among UNIX administrators.
+
+Bug: https://bugzilla.redhat.com/show_bug.cgi?id=1298478
+---
+ src/defs-nis.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/defs-nis.c b/src/defs-nis.c
+index 3d2b9e9..ad0e7dc 100644
+--- a/src/defs-nis.c
++++ b/src/defs-nis.c
+@@ -52,17 +52,17 @@ static struct configuration {
+ 	{"passwd.byname", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixAccount)",
+ 	 "%{uid}", NULL,
+-	 "%{uid}:%ifeq(\"objectClass\",\"shadowAccount\",\"x\",\"%regsubi(\\\"%{userPassword}\\\",\\\"^\\\\\\\\{CRYPT\\\\\\\\}(..*)\\\",\\\"%1\\\",\\\"*\\\")\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
++	 "%{uid}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%ifeq(\"objectClass\",\"shadowAccount\",\"x\",\"%regsubi(\\\"%{userPassword}\\\",\\\"^\\\\\\\\{CRYPT\\\\\\\\}(..*)\\\",\\\"%1\\\",\\\"*\\\")\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
+ 	 ":\r\n"},
+ 	{"passwd.byuid", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixAccount)",
+ 	 "%{uidNumber}", NULL,
+-	 "%{uid}:%ifeq(\"objectClass\",\"shadowAccount\",\"x\",\"%regsubi(\\\"%{userPassword}\\\",\\\"^\\\\\\\\{CRYPT\\\\\\\\}(..*)\\\",\\\"%1\\\",\\\"*\\\")\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
++	 "%{uid}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%ifeq(\"objectClass\",\"shadowAccount\",\"x\",\"%regsubi(\\\"%{userPassword}\\\",\\\"^\\\\\\\\{CRYPT\\\\\\\\}(..*)\\\",\\\"%1\\\",\\\"*\\\")\"):%regmatch(\"%{uidNumber}\",\"[0-9]+\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%{gecos:-%{cn:-}}:%{homeDirectory:-/}:%{loginShell:-" _PATH_BSHELL "}", NULL,
+ 	 ":\r\n"},
+ 	{"shadow.byname", config_exact, TRUE, NULL,
+ 	 "(objectClass=shadowAccount)",
+ 	 "%{uid}", NULL,
+-	 "%{uid}:%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%{shadowLastChange:-}:%{shadowMin:-}:%{shadowMax:-}:%{shadowWarning:-}:%{shadowInactive:-}:%{shadowExpire:-}:%{shadowFlag:-}", NULL,
++	 "%{uid}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%{shadowLastChange:-}:%{shadowMin:-}:%{shadowMax:-}:%{shadowWarning:-}:%{shadowInactive:-}:%{shadowExpire:-}:%{shadowFlag:-}", NULL,
+ 	 ":\r\n"},
+ 	{"passwd.adjunct.byname", config_exact, TRUE, NULL,
+ 	 "(objectClass=shadowAccount)",
+@@ -72,12 +72,12 @@ static struct configuration {
+ 	{"group.byname", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixGroup)",
+ 	 "%{cn}", NULL,
+-	 "%{cn}:%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
++	 "%{cn}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%regmatch(\"%{gidNumber}\",\"[0-9]+\"):%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
+ 	 ":,\r\n"},
+ 	{"group.bygid", config_exact, FALSE, NULL,
+ 	 "(objectClass=posixGroup)",
+ 	 "%{gidNumber}", NULL,
+-	 "%{cn}:%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%{gidNumber}:%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
++	 "%{cn}:%ifeq(\"nsAccountLock\",\"TRUE\",\"!!\",\"\")%regsubi(\"%{userPassword}\",\"^\\\\{CRYPT\\\\}(..*)\",\"%1\",\"*\"):%{gidNumber}:%merge(\",\",\"%{memberUid}\",\"%deref_r(\\\"member\\\",\\\"uid\\\")\",\"%deref_r(\\\"uniqueMember\\\",\\\"uid\\\")\")", NULL,
+ 	 ":,\r\n"},
+ 	{"netgroup", config_exact, FALSE, NULL,
+ 	 "(objectClass=nisNetgroup)",
+-- 
+2.5.0
+

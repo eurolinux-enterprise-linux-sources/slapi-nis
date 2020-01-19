@@ -1,0 +1,20 @@
+dn: cn=referential integrity postoperation,cn=plugins,cn=config
+objectclass: top
+objectclass: nsSlapdPlugin
+objectclass: extensibleObject
+cn: referential integrity postoperation
+nsslapd-pluginpath: libreferint-plugin
+nsslapd-plugininitfunc: referint_postop_init
+nsslapd-plugintype: postoperation
+nsslapd-pluginenabled: on
+nsslapd-pluginprecedence: 40
+nsslapd-pluginArg0: 0
+nsslapd-pluginArg1: @abs_top_builddir@/tests/state/log/referint
+nsslapd-pluginArg2: 0
+nsslapd-pluginArg3: member
+nsslapd-pluginArg4: uniquemember
+nsslapd-pluginArg5: owner
+nsslapd-pluginArg6: seeAlso
+nsslapd-plugin-depends-on-type: database
+@TEST_PLUGIN_BETXN_ENABLE_OR_NOT@
+

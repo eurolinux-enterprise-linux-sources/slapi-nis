@@ -1,0 +1,266 @@
+[search -b dc=example,dc=com -s base]
+dn: dc=example,dc=com
+objectClass: top
+objectClass: domain
+dc: example
+
+[search -b dc=example,dc=com -s one]
+dn: cn=Accounts,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: Accounts
+
+dn: cn=compatpeople,dc=example,dc=com
+objectClass: extensibleObject
+cn: compatpeople
+
+dn: cn=ipServices,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: ipServices
+
+[search -b dc=example,dc=com -s sub]
+dn: cn=Accounts,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: Accounts
+
+dn: cn=Groups1,cn=Accounts,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: Groups1
+
+dn: cn=Groups2,cn=Accounts,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: Groups2
+
+dn: cn=Users1,cn=Accounts,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: Users1
+
+dn: cn=Users2,cn=Accounts,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: Users2
+
+dn: cn=compatpeople,dc=example,dc=com
+objectClass: extensibleObject
+cn: compatpeople
+
+dn: cn=ipServices,dc=example,dc=com
+objectClass: nsContainer
+objectClass: top
+cn: ipServices
+
+dn: cn=users,cn=Accounts,dc=example,dc=com
+objectClass: top
+objectClass: nsContainer
+cn: users
+
+dn: dc=example,dc=com
+objectClass: top
+objectClass: domain
+dc: example
+
+dn: uid=tuser1,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Tim User
+cn: Tim User
+uidNumber: 1101
+gidNumber: 1003
+loginShell: /bin/sh
+homeDirectory: /home/tuser1
+uid: tuser1
+
+dn: uid=tuser1,cn=users,cn=Accounts,dc=example,dc=com
+uid: tuser1
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+loginShell: /bin/sh
+gidNumber: 1003
+gecos: tuser1
+sn: User
+homeDirectory: /home/tuser1
+cn: Tim User
+uidNumber: 1101
+
+dn: uid=tuser3,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Timothy User
+cn: Timothy User
+uidNumber: 1103
+gidNumber: 1004
+loginShell: /bin/sh
+homeDirectory: /home/tuser3
+uid: tuser3
+
+dn: uid=tuser3,cn=users,cn=Accounts,dc=example,dc=com
+uid: tuser3
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+loginShell: /bin/sh
+gidNumber: 1004
+gecos: tuser3
+sn: User
+homeDirectory: /home/tuser3
+cn: Timothy User
+uidNumber: 1103
+
+dn: uid=user1a,cn=Users1,cn=Accounts,dc=example,dc=com
+objectClass: posixAccount
+objectClass: inetUser
+objectClass: top
+uid: user1a
+uidNumber: 1001
+gidNumber: 1001
+cn: User 1 A
+gecos: User 1 A
+loginShell: /bin/sh
+homeDirectory: /home/user1a
+
+dn: uid=user1b,cn=Users1,cn=Accounts,dc=example,dc=com
+objectClass: posixAccount
+objectClass: inetUser
+objectClass: top
+uid: user1b
+uidNumber: 1002
+gidNumber: 1002
+cn: User 1 B
+gecos: User 1 B
+loginShell: /bin/sh
+homeDirectory: /home/user1b
+
+dn: uid=user1c,cn=Users1,cn=Accounts,dc=example,dc=com
+objectClass: posixAccount
+objectClass: inetUser
+objectClass: top
+uid: user1c
+uidNumber: 1003
+gidNumber: 1003
+cn: User 1 C
+gecos: User 1 C
+loginShell: /bin/sh
+homeDirectory: /home/user1c
+
+dn: uid=user2a,cn=Users2,cn=Accounts,dc=example,dc=com
+objectClass: posixAccount
+objectClass: inetUser
+objectClass: top
+uid: user2a
+uidNumber: 2001
+gidNumber: 2001
+cn: User 2 A
+gecos: User 2 A
+loginShell: /bin/sh
+homeDirectory: /home/user2a
+
+dn: uid=user2b,cn=Users2,cn=Accounts,dc=example,dc=com
+objectClass: posixAccount
+objectClass: inetUser
+objectClass: top
+uid: user2b
+uidNumber: 2002
+gidNumber: 2002
+cn: User 2 B
+gecos: User 2 B
+loginShell: /bin/sh
+homeDirectory: /home/user2b
+
+dn: uid=user2c,cn=Users2,cn=Accounts,dc=example,dc=com
+objectClass: posixAccount
+objectClass: inetUser
+objectClass: top
+uid: user2c
+uidNumber: 2003
+gidNumber: 2003
+cn: User 2 C
+gecos: User 2 C
+loginShell: /bin/sh
+homeDirectory: /home/user2c
+
+[search -b cn=compatpeople,dc=example,dc=com -s base]
+dn: cn=compatpeople,dc=example,dc=com
+objectClass: extensibleObject
+cn: compatpeople
+
+[search -b cn=compatpeople,dc=example,dc=com -s one]
+dn: uid=tuser1,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Tim User
+cn: Tim User
+uidNumber: 1101
+gidNumber: 1003
+loginShell: /bin/sh
+homeDirectory: /home/tuser1
+uid: tuser1
+
+dn: uid=tuser3,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Timothy User
+cn: Timothy User
+uidNumber: 1103
+gidNumber: 1004
+loginShell: /bin/sh
+homeDirectory: /home/tuser3
+uid: tuser3
+
+[search -b cn=compatpeople,dc=example,dc=com -s sub]
+dn: cn=compatpeople,dc=example,dc=com
+objectClass: extensibleObject
+cn: compatpeople
+
+dn: uid=tuser1,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Tim User
+cn: Tim User
+uidNumber: 1101
+gidNumber: 1003
+loginShell: /bin/sh
+homeDirectory: /home/tuser1
+uid: tuser1
+
+dn: uid=tuser3,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Timothy User
+cn: Timothy User
+uidNumber: 1103
+gidNumber: 1004
+loginShell: /bin/sh
+homeDirectory: /home/tuser3
+uid: tuser3
+
+[search -b uid=tuser1,cn=compatpeople,dc=example,dc=com -s base]
+dn: uid=tuser1,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Tim User
+cn: Tim User
+uidNumber: 1101
+gidNumber: 1003
+loginShell: /bin/sh
+homeDirectory: /home/tuser1
+uid: tuser1
+
+[search -b uid=tuser1,cn=compatpeople,dc=example,dc=com -s one]
+[search -b uid=tuser1,cn=compatpeople,dc=example,dc=com -s sub]
+dn: uid=tuser1,cn=compatpeople,dc=example,dc=com
+objectClass: posixAccount
+objectClass: top
+gecos: Tim User
+cn: Tim User
+uidNumber: 1101
+gidNumber: 1003
+loginShell: /bin/sh
+homeDirectory: /home/tuser1
+uid: tuser1
+

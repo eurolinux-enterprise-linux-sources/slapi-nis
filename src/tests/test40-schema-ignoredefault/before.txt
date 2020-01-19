@@ -1,0 +1,7 @@
+dn: cn=compat,cn=accounts,dc=example,dc=com
+
+dn: cn=g2,ou=group,cn=compat,cn=accounts,dc=example,dc=com
+gidNumber: 2002
+
+dn: ou=group,cn=compat,cn=accounts,dc=example,dc=com
+

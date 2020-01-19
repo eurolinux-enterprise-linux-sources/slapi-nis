@@ -1,0 +1,14 @@
+dn: cn=groups, cn=Schema Compatibility, cn=plugins, cn=config
+objectClass: top
+objectclass: extensibleObject
+cn: groups
+schema-compat-container-group: cn=compat, dc=example, dc=com
+schema-compat-container-rdn: cn=groups
+schema-compat-search-base: cn=Groups, cn=Accounts, dc=example, dc=com
+schema-compat-search-filter: objectclass=posixGroup
+schema-compat-entry-rdn: cn=%{cn}
+schema-compat-entry-attribute: objectclass=posixGroup
+schema-compat-entry-attribute: gidNumber=%{gidNumber}
+schema-compat-entry-attribute: memberUid=%%%deref_f("member","objectclass=posixgroup","cn")
+schema-compat-entry-attribute: memberUid=%deref_f("member","objectclass=posixaccount","uid")
+

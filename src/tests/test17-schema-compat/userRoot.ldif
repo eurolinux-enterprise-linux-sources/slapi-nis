@@ -1,0 +1,42 @@
+dn: cn=Groups, cn=Accounts, dc=example, dc=com
+objectClass: nsContainer
+cn: Groups
+
+dn: cn=group1a,cn=groups,cn=accounts,dc=example,dc=com
+cn: group1a
+objectClass: posixgroup
+objectclass: groupofnames
+gidNumber: 3001
+
+dn: cn=group1b,cn=groups,cn=accounts,dc=example,dc=com
+cn: group1b
+objectClass: posixgroup
+objectclass: groupofnames
+gidNumber: 3002
+
+dn: cn=group1c,cn=groups,cn=accounts,dc=example,dc=com
+cn: group1c
+objectClass: posixgroup
+objectclass: groupofnames
+gidNumber: 3002
+
+dn: cn=group2a,cn=groups,cn=accounts,dc=example,dc=com
+cn: group2a
+objectClass: posixgroup
+objectclass: groupofnames
+gidNumber: 4001
+
+dn: cn=group2b,cn=groups,cn=accounts,dc=example,dc=com
+cn: group2b
+objectClass: posixgroup
+objectclass: groupofnames
+member: cn=group2a,cn=groups,cn=accounts,dc=example,dc=com
+gidNumber: 4002
+
+dn: cn=group2c,cn=groups,cn=accounts,dc=example,dc=com
+cn: group2c
+objectClass: posixgroup
+objectclass: groupofnames
+member: cn=group2b,cn=groups,cn=accounts,dc=example,dc=com
+gidNumber: 4002
+

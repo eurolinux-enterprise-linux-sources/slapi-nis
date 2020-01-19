@@ -1,0 +1,384 @@
+# suppressions for leaks that aren't from here
+{
+   dirsrv_frontend_config
+   Memcheck:Leak
+   ...
+   fun:slapi_ch_strdup
+   fun:FrontendConfig_init
+   fun:main
+}
+{
+   dirsrv_frontend_config_2
+   Memcheck:Leak
+   ...
+   fun:PL_*HashTable*
+   fun:FrontendConfig_init
+   fun:main
+}
+{
+   dirsrv_frontend_config_3
+   Memcheck:Leak
+   ...
+   fun:charray_add
+   fun:FrontendConfig_init
+   fun:main
+}
+{
+   dirsrv_frontend_config_4
+   Memcheck:Leak
+   ...
+   fun:rwl_new
+   fun:FrontendConfig_init
+   fun:main
+}
+{
+   dirsrv_dse_avl_init
+   Memcheck:Leak
+   ...
+   fun:avl_insert
+   fun:dse_add_entry_pb
+   fun:dse_read_one_file
+   fun:dse_read_file
+   fun:setup_internal_backends
+   fun:main
+}
+{
+   dirsrv_ldbm_logdir
+   Memcheck:Leak
+   ...
+   fun:ldbm_back_init
+   fun:plugin_setup
+   fun:load_plugin_entry
+   fun:dse_call_callback.clone.3
+   fun:dse_read_one_file
+   fun:dse_read_file
+   fun:setup_internal_backends
+   fun:main
+}
+{
+   dirsrv_setup_internal_backends
+   Memcheck:Leak
+   ...
+   fun:setup_internal_backends
+   fun:main
+}
+{
+   dirsrv_nspr_1
+   Memcheck:Leak
+   ...
+   fun:_PR_InitStuff
+   fun:main
+}
+{
+   dirsrv_nspr_2
+   Memcheck:Leak
+   ...
+   fun:_PR_UnixInit
+   fun:main
+}
+{
+   dirsrv_des_plugin
+   Memcheck:Leak
+   ...
+   fun:des_init
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_pwd_plugin
+   Memcheck:Leak
+   ...
+   fun:*_pwd_storage_scheme_init
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_pwd_name
+   Memcheck:Leak
+   ...
+   fun:pw_name2scheme
+   fun:config_set_storagescheme
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_ptd_plugin
+   Memcheck:Leak
+   ...
+   fun:ptd_init
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_plugin_sdn
+   Memcheck:Leak
+   ...
+   fun:slapi_sdn_get_ndn
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_plugin_strdup
+   Memcheck:Leak
+   ...
+   fun:slapi_ch_strdup
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_plugin_sdn_dup
+   Memcheck:Leak
+   ...
+   fun:slapi_sdn_dup
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_plugin_hash
+   Memcheck:Leak
+   ...
+   fun:PL_*HashTable*
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_plugin_charray
+   Memcheck:Leak
+   ...
+   fun:charray_add
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_plugin_charray
+   Memcheck:Leak
+   ...
+   fun:PR_OpenFile
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_log
+   Memcheck:Leak
+   ...
+   fun:g_log_init
+   fun:main
+}
+{
+   dirsrv_component_id
+   Memcheck:Leak
+   ...
+   fun:generate_componentid
+   ...
+   fun:main
+}
+{
+   dirsrv_register_matchingrule
+   Memcheck:Leak
+   ...
+   fun:slapi_matchingrule_register
+   ...
+   fun:main
+}
+{
+   dirsrv_register_matchingrule_2
+   Memcheck:Leak
+   ...
+   fun:syntax_register_matching_rule_plugins
+   ...
+   fun:main
+}
+{
+   dirsrv_register_type
+   Memcheck:Leak
+   ...
+   fun:factory_register_type
+   ...
+   fun:main
+}
+{
+   dirsrv_register_sasl
+   Memcheck:Leak
+   ...
+   fun:slapi_register_supported_saslmechanism
+   fun:main
+}
+{
+   dirsrv_def_backend_init
+   Memcheck:Leak
+   ...
+   fun:defbackend_init
+   fun:main
+}
+{
+   dirsrv_computed
+   Memcheck:Leak
+   ...
+   fun:*computed_*
+   fun:main
+}
+{
+   dirsrv_compute
+   Memcheck:Leak
+   ...
+   fun:*compute_*
+   fun:main
+}
+{
+   dirsrv_config_set_configdir
+   Memcheck:Leak
+   ...
+   fun:config_set_configdir
+   fun:main
+}
+{
+   dirsrv_set_entry_points
+   Memcheck:Leak
+   ...
+   fun:set_entry_points
+   fun:main
+}
+{
+   dirsrv_rel2abspath_ext
+   Memcheck:Leak
+   ...
+   fun:rel2abspath_ext
+   fun:main
+}
+{
+   dirsrv_orderingrule_init
+   Memcheck:Leak
+   ...
+   fun:orderingRule_init
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_vattr_init
+   Memcheck:Leak
+   ...
+   fun:vattr_init
+   fun:main
+}
+{
+   dirsrv_init_controls
+   Memcheck:Leak
+   ...
+   fun:init_controls
+   fun:main
+}
+{
+   dirsrv_init_exops
+   Memcheck:Leak
+   ...
+   fun:ldapi_init_extended_ops
+   fun:main
+}
+{
+   dirsrv_init_saslmechanisms
+   Memcheck:Leak
+   ...
+   fun:init_saslmechanisms
+   fun:main
+}
+{
+   dirsrv_other_plugin_1
+   Memcheck:Leak
+   ...
+   fun:slapi_entry_*
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_other_plugin_2
+   Memcheck:Leak
+   ...
+   fun:slapi_ch_calloc
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_other_plugin_3
+   Memcheck:Leak
+   ...
+   fun:PR_LoadLibraryWithFlags
+   fun:sym_load_with_flags
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_other_plugin_4
+   Memcheck:Leak
+   ...
+   fun:slapi_ch_*
+   fun:sym_load_with_flags
+   fun:plugin_setup
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_slapd_init
+   Memcheck:Leak
+   fun:calloc
+   fun:PR_NewLock
+   fun:slapd_init
+   fun:main
+}
+{
+   dirsrv_slapd_init_counter
+   Memcheck:Leak
+   ...
+   fun:slapi_counter_new
+   fun:slapd_init
+   fun:main
+}
+{
+   dirsrv_listen
+   Memcheck:Leak
+   ...
+   fun:slapd_listenhost2addr
+   fun:main
+}
+{
+   dirsrv_boostrap_config
+   Memcheck:Leak
+   ...
+   fun:slapi_str2entry
+   fun:slapd_bootstrap_config
+   fun:main
+}
+{
+   dirsrv_register_control
+   Memcheck:Leak
+   ...
+   fun:slapi_register_supported_control
+   fun:main
+}
+{
+   dirsrv_strdup
+   Memcheck:Leak
+   ...
+   fun:slapi_ch_strdup
+   fun:main
+}
+{
+   plugin_rwlock_abstraction
+   Memcheck:Leak
+   fun:malloc
+   fun:wrap_new_rwlock
+   fun:map_init
+   ...
+   fun:main
+}

@@ -1,0 +1,27 @@
+map list:
+groups
+memberships
+self
+groups
+memberships
+self
+contents of example.com:groups:
+group1	group1-fake-uid:group1
+group2	group2-fake-uid:group2,group2-fake-uid:group2-alternate-name
+group2-alternate-name	group2-fake-uid:group2,group2-fake-uid:group2-alternate-name
+contents of example.com:memberships:
+user1	group1
+user1a	
+user1b	
+user1c	
+user2a	
+user2b	
+user2c	
+contents of example.com:self:
+user1	user1,user1,user1,user1
+user1a	user1a,user1a,user1a,user1a
+user1b	user1b,user1b,user1b,user1b
+user1c	user1c,user1c,user1c,user1c
+user2a	user2a,user2a,user2a,user2a
+user2b	user2b,user2b,user2b,user2b
+user2c	user2c,user2c,user2c,user2c

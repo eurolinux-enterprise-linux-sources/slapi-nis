@@ -1,0 +1,5 @@
+order of evaluation of multiple multi-valued attrs
+
+Specifically, we're making sure that the behavior when multiple
+multi-valued attributes are referenced is that the more-to-the-right
+attributes iterate their values more often as we evaluate.

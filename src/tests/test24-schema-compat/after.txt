@@ -1,0 +1,63 @@
+dn: cn=compat,dc=example,dc=com
+objectClass: extensibleObject
+cn: compat
+
+dn: cn=g1,ou=deepgroups,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: top
+gidNumber: 1001
+memberUid: tuser1
+memberUid: tuser3
+cn: g1
+
+dn: cn=g1,ou=groupmembers,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: groupOfNames
+objectClass: top
+gidNumber: 1001
+cn: g1
+
+dn: cn=g1,ou=usermembers,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: top
+gidNumber: 1001
+memberUid: tuser1
+memberUid: tuser3
+cn: g1
+
+dn: cn=g2,ou=deepgroups,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: top
+gidNumber: 1002
+memberUid: tuser2
+memberUid: tuser1
+memberUid: tuser3
+cn: g2
+
+dn: cn=g2,ou=groupmembers,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: groupOfNames
+objectClass: top
+gidNumber: 1002
+memberUid: @g1
+cn: g2
+
+dn: cn=g2,ou=usermembers,cn=compat,dc=example,dc=com
+objectClass: posixGroup
+objectClass: top
+gidNumber: 1002
+memberUid: tuser2
+cn: g2
+
+dn: ou=deepgroups,cn=compat,dc=example,dc=com
+objectClass: extensibleObject
+ou: deepgroups
+
+dn: ou=groupmembers,cn=compat,dc=example,dc=com
+objectClass: extensibleObject
+ou: groupmembers
+
+dn: ou=usermembers,cn=compat,dc=example,dc=com
+objectClass: extensibleObject
+ou: usermembers
+

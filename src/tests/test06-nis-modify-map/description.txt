@@ -1,0 +1,1 @@
+detect change of search filter for map (2)

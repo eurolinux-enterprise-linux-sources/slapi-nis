@@ -1,0 +1,2 @@
+adding new entry "cn=ng,cn=Schema Compatibility,cn=plugins,cn=config"
+
