@@ -11,39 +11,25 @@
 
 Name:		slapi-nis
 Version:	0.56.0
-Release:	12%{?dist}
+Release:	4%{?dist}
 Summary:	NIS Server and Schema Compatibility plugins for Directory Server
 Group:		System Environment/Daemons
 License:	GPLv2
-URL:		http://pagure.io/slapi-nis/
-Source0:	https://releases.pagure.org/slapi-nis/slapi-nis-%{version}.tar.gz
-Source1:	https://releases.pagure.org/slapi-nis/slapi-nis-%{version}.tar.gz.sig
+URL:		http://slapi-nis.fedorahosted.org/
+Source0:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz
+Source1:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz.sig
 Patch1:		slapi-0001-Move-advance-definition-of-backend_passwdmod_extop-b.patch
 Patch2:		slapi-0002-Initialize-ret-before-use.patch
 Patch3:		slapi-0003-slapi-nis-resolve-IPA-groups-with-fully-qualified-su.patch
 Patch4:		slapi-0004-Declare-int-backend_init_extop-for-reuse-in-plug-sch.patch
-Patch5:		slapi-0005-Double-free-on-ldap-entry-during-priming.patch
 Patch6:		slapi-0006-back-sch-do-not-clobber-target-of-the-pblock-for-idv.patch
 Patch7:		slapi-0007-back-sch-nss-for-users-with-aliases-return-alias-as-.patch
-Patch11:	slapi-0011-Move-a-helper-to-build-DN-to-a-format.c.patch
-Patch12:	slapi-0012-Add-dummy-handler-for-a-related-add-delete-modify-to.patch
-Patch13:	slapi-0013-track-changes-to-ID-overrides-and-evict-map-cache-en.patch
-Patch15:	slapi-0015-configure.ac-detect-extended-NSS-API-provided-by-SSS.patch
-Patch16:	slapi-0016-schema-compat-add-support-for-timeout-based-NSS-quer.patch
-Patch17:	slapi-0017-back-sch-cancel-memberof-retrieval-in-case-of-a-dirs.patch
-Patch18:	slapi-0017-Fix-nss_sss-callers.patch
-Patch19:	slapi-0018-Clean-up-unused-code.patch
-Patch20:	slapi-0019-Synchronize-nsswitch-backend-code-with-freeIPA.patch
-Patch21:	slapi-0020-Use-extended-SSSD-API-to-signal-that-an-entry-should.patch
-Patch22:	slapi-0100-deadlok-between-write-and-search-operation.patch
-
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires: libtool, automake, autoconf
 BuildRequires:	389-ds-base-devel >= 1.3.5.6, %{ldap_impl}-devel
 BuildRequires:	nspr-devel, nss-devel, /usr/bin/rpcgen
 %if 0%{?fedora} > 18 || 0%{?rhel} > 6
-BuildRequires:	libsss_nss_idmap-devel >= 1.16.0-11
+BuildRequires:	libsss_nss_idmap-devel
 %define sss_nss_opts --with-sss-nss-idmap
 %else
 %define sss_nss_opts %{nil}
@@ -61,9 +47,6 @@ BuildRequires:	libtirpc-devel
 ExclusiveArch:	x86_64 %{ix86}
 %endif
 Requires: 389-ds-base >= 1.3.5.6
-%if 0%{?fedora} > 18 || 0%{?rhel} > 6
-Requires: libsss_nss_idmap >= 1.16.0-11
-%endif
 
 %description
 This package provides two plugins for Red Hat and 389 Directory Server.
@@ -84,27 +67,11 @@ for attributes from multiple entries in the tree.
 %patch2 -p1
 %patch3 -p1
 %patch4 -p1
-%patch5 -p1
+# patch 5 is part of patch 3
 %patch6 -p1
 %patch7 -p1
-%patch11 -p1
-%patch12 -p1
-%patch13 -p1
-%patch15 -p1
-%patch16 -p1
-%patch17 -p1
-%patch18 -p1
-%patch19 -p1
-%patch20 -p1
-%patch21 -p1
-%patch22 -p1
 
 %build
-libtoolize -f -c
-aclocal --force -I m4
-autoheader
-automake -f -a -i
-autoconf -f -i
 %configure --disable-static --with-tcp-wrappers --with-ldap=%{ldap_impl} \
 	--with-nsswitch --with-pam --with-pam-service=system-auth \
 	%{sss_nss_opts} %{betxn_opts}
@@ -133,42 +100,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_sbindir}/nisserver-plugin-defs
 
 %changelog
-* Tue Apr 23 2019 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-12
-- Related: #1435663
-  Covscan fixes
-
-* Wed Mar 27 2019 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-11
-- Fixed: #1435663
-  Additional set of fixes for conflicts over cn=config updates
-
-* Wed Mar 27 2019 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-10
-- Fixed: #1435663
-
-* Wed Dec 05 2018 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-9
-- Fixed: #1502429
-- Update upstream reference to http://pagure.io/slapi-nis/
-
-* Fri Dec 08 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-8
-- Fixed: #1473572
-- Changes of ID overrides now force clearing of affected SSSD cache entries on IPA master
-- Related: #1473577
-- Synchronize timeout-enabled code with ipa-extdom-extop
-
-* Mon Nov 06 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-7
-- Related: #1473577
-- Force at least SSSD 1.16.0-3 for timeout-enabled NSS API
-
-* Fri Nov 03 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-6
-- Related: #1473577
-- Update configure and make files over the old release
-- Fix nss_sss usage
-
-* Fri Nov 03 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-5
-- Resolves: #1473572
-- Fixed: Make changes in overrides available in the compat tree at runtime
-- Resolves: #1473577
-- Fixed: slapi-nis should use requests to SSSD with ability to cancel them with a timeout
-
 * Tue Aug 09 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-4
 - Fixed: UPN-based search for AD users does not match an entry in slapi-nis map cache
 - Resolves: #1361123
