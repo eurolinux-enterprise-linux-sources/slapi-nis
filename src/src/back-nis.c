@@ -1021,6 +1021,12 @@ backend_startup(Slapi_PBlock *pb, struct plugin_state *state)
 	backend_shr_startup(state, pb, NIS_MAP_CONFIGURATION_FILTER);
 }
 
+void
+backend_shutdown(struct plugin_state *state)
+{
+    backend_shr_shutdown(state);
+}
+
 /* Set up our post-op callbacks. */
 #ifdef SLAPI_NIS_SUPPORT_BE_TXNS
 int

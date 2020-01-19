@@ -1,0 +1,25 @@
+From 55efe7e2be2ed7664e2d5bb5b2b0d9d11d5e3f70 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Mon, 20 Jun 2016 21:41:12 +0300
+Subject: [PATCH 1/4] Move advance definition of backend_passwdmod_extop before
+ use
+
+---
+ src/back-sch.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 5ba04f4..ff8e8a2 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -54,6 +54,7 @@
+ #include "map.h"
+ #include "back-sch.h"
+ 
++static int backend_passwdmod_extop(Slapi_PBlock *pb);
+ backend_extop_handlers_t extop_handlers[] = {{EXTOP_PASSWD_OID, (IFP) backend_passwdmod_extop},
+ 					    {NULL, NULL}};
+ static void
+-- 
+2.7.4
+

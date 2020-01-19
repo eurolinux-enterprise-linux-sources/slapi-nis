@@ -79,6 +79,18 @@ struct wrapped_rwlock {
 #endif
 };
 
+struct wrapped_mutex {
+#if defined(USE_SLAPI_LOCKS)
+	Slapi_Mutex *mutex;
+#elif defined(USE_PTHREAD_LOCKS)
+	pthread_mutex_t mutex;
+#elif defined(USE_NSPR_LOCKS)
+	PRLock *mutex;
+#else
+#error "Unknown thread-safe locking model!"
+#endif
+};
+
 #ifdef USE_NSPR_THREADS
 static void
 wrap_pthread_starter(void *p)
@@ -168,6 +180,84 @@ wrap_thread_stopfd(struct wrapped_thread *t)
 #endif
 	return ret;
 }
+
+struct wrapped_mutex *
+wrap_new_mutex(void)
+{
+	struct wrapped_mutex *mutex;
+	mutex = malloc(sizeof(*mutex));
+	if (mutex == NULL) {
+		return NULL;
+	}
+#ifdef USE_SLAPI_LOCKS
+	mutex->mutex = slapi_new_mutex();
+	if (mutex->mutex == NULL) {
+		free(mutex);
+		return NULL;
+	}
+#endif
+#ifdef USE_PTHREAD_LOCKS
+	if (pthread_mutex_init(&mutex->mutex, NULL) != 0) {
+		free(mutex);
+		return NULL;
+	}
+#endif
+#ifdef USE_NSPR_LOCKS
+	mutex->mutex = PR_NewLock();
+	if (mutex->mutex == NULL) {
+		free(mutex);
+		return NULL;
+	}
+#endif
+	return mutex;
+}
+
+void
+wrap_free_mutex(struct wrapped_mutex *mutex)
+{
+#ifdef USE_SLAPI_LOCKS
+	slapi_destroy_mutex(mutex->mutex);
+#endif
+#ifdef USE_PTHREAD_LOCKS
+	pthread_mutex_destroy(&mutex->mutex);
+#endif
+#ifdef USE_NSPR_LOCKS
+	PR_DestroyLock(mutex->mutex);
+#endif
+	free(mutex);
+}
+
+int
+wrap_mutex_lock(struct wrapped_mutex *mutex)
+{
+#ifdef USE_SLAPI_LOCKS
+	slapi_lock_mutex(mutex->mutex);
+        return 0;
+#endif
+#ifdef USE_PTHREAD_LOCKS
+	return pthread_mutex_lock(&mutex->mutex);
+#endif
+#ifdef USE_NSPR_LOCKS
+	PR_Lock(mutex->mutex);
+	return 0;
+#endif
+}
+
+int
+wrap_mutex_unlock(struct wrapped_mutex *mutex)
+{
+#ifdef USE_SLAPI_LOCKS
+	return slapi_unlock_mutex(mutex->mutex);
+#endif
+#ifdef USE_PTHREAD_LOCKS
+	return pthread_mutex_unlock(&mutex->mutex);
+#endif
+#ifdef USE_NSPR_LOCKS
+	PR_Unlock(mutex->mutex);
+	return 0;
+#endif
+}
+
 
 struct wrapped_rwlock *
 wrap_new_rwlock(void)

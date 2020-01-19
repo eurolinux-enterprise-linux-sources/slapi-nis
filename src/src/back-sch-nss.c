@@ -28,9 +28,10 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <dlfcn.h>
+#include <errno.h>
 #include <pwd.h>
 #include <grp.h>
-#include <errno.h>
 
 #ifdef HAVE_DIRSRV_SLAPI_PLUGIN_H
 #include <nspr.h>
@@ -139,9 +140,12 @@ backend_search_filter_has_cn_uid(Slapi_Filter *filter, void *arg)
 					}
 					slapi_ch_free_string(&memberUid);
 				}
+				config->name_set = TRUE;
+				config->search_members = TRUE;
+			} else {
+				/* there is no '@' in the memberUid name, it is not a trusted AD forest's user */
+				config->wrong_search = TRUE;
 			}
-			config->name_set = TRUE;
-			config->search_members = TRUE;
 		} else if ((0 == strcasecmp(filter_type, "objectClass")) &&
 			   (0 == bvstrcasecmp(bval, "posixGroup"))) {
 			config->search_group = TRUE;
@@ -242,12 +246,22 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
 		return NULL;
 	}
 
-	dn = backend_build_dn("uid", pwd->pw_name, container_sdn);
-	if (dn == NULL) {
+	name = (char *) slapi_utf8StrToLower((unsigned char *) pwd->pw_name);
+	if (name == NULL) {
 		slapi_log_error(SLAPI_LOG_FATAL,
 				cbdata->state->plugin_desc->spd_id,
 				"error building DN for uid=%s,%s skipping\n",
 				pwd->pw_name, container_sdn);
+		slapi_entry_free(entry);
+		return NULL;
+	}
+
+	dn = backend_build_dn("uid", name, container_sdn);
+	if (dn == NULL) {
+		slapi_log_error(SLAPI_LOG_FATAL,
+				cbdata->state->plugin_desc->spd_id,
+				"error building DN for uid=%s,%s skipping\n",
+				name, container_sdn);
 		slapi_entry_free(entry);
 		return NULL;
 	}
@@ -257,7 +271,7 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
 	slapi_entry_add_string(entry,
 			       "objectClass", "posixAccount");
 	slapi_entry_add_string(entry,
-			       "uid", pwd->pw_name);
+			       "uid", name);
 	slapi_entry_attr_set_uint(entry,
 				 "uidNumber", pwd->pw_uid);
 	slapi_entry_attr_set_uint(entry,
@@ -282,6 +296,7 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
 	}
 
 	slapi_entry_set_dn(entry, dn);
+	slapi_ch_free_string(&name);
 
 #ifdef HAVE_SSS_NSS_IDMAP
 	rc = sss_nss_getsidbyid(pwd->pw_uid, &sid_str, &id_type);
@@ -307,6 +322,144 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
 	return entry;
 }
 
+/* Possible results of lookup using a nss_* function.
+ * Note: don't include nss.h as its path gets overriden by NSS library */
+enum nss_status
+{
+  NSS_STATUS_TRYAGAIN = -2,
+  NSS_STATUS_UNAVAIL,
+  NSS_STATUS_NOTFOUND,
+  NSS_STATUS_SUCCESS,
+  NSS_STATUS_RETURN
+};
+
+struct nss_ops_ctx {
+	void *dl_handle;
+
+	enum nss_status (*getpwnam_r)(const char *name, struct passwd *result,
+			  char *buffer, size_t buflen, int *errnop);
+	enum nss_status (*getpwuid_r)(uid_t uid, struct passwd *result,
+			  char *buffer, size_t buflen, int *errnop);
+	enum nss_status (*setpwent)(void);
+	enum nss_status (*getpwent_r)(struct passwd *result,
+			  char *buffer, size_t buflen, int *errnop);
+	enum nss_status (*endpwent)(void);
+
+	enum nss_status (*getgrnam_r)(const char *name, struct group *result,
+			  char *buffer, size_t buflen, int *errnop);
+	enum nss_status (*getgrgid_r)(gid_t gid, struct group *result,
+			  char *buffer, size_t buflen, int *errnop);
+	enum nss_status (*setgrent)(void);
+	enum nss_status (*getgrent_r)(struct group *result,
+			  char *buffer, size_t buflen, int *errnop);
+	enum nss_status (*endgrent)(void);
+
+	enum nss_status (*initgroups_dyn)(const char *user, gid_t group,
+			      long int *start, long int *size,
+			      gid_t **groups, long int limit,
+			      int *errnop);
+};
+
+void backend_nss_init_context(struct nss_ops_ctx **nss_context)
+{
+	struct nss_ops_ctx *ctx = NULL;
+
+	if (nss_context == NULL) {
+		return;
+	}
+
+	ctx = calloc(1, sizeof(struct nss_ops_ctx));
+
+	*nss_context = ctx;
+	if (ctx == NULL) {
+		return;
+	}
+
+	ctx->dl_handle = dlopen("libnss_sss.so.2", RTLD_NOW);
+	if (ctx->dl_handle == NULL) {
+		goto fail;
+	}
+
+	ctx->getpwnam_r = dlsym(ctx->dl_handle, "_nss_sss_getpwnam_r");
+	if (ctx->getpwnam_r == NULL) {
+		goto fail;
+	}
+
+	ctx->getpwuid_r = dlsym(ctx->dl_handle, "_nss_sss_getpwuid_r");
+	if (ctx->getpwuid_r == NULL) {
+		goto fail;
+	}
+
+	ctx->setpwent = dlsym(ctx->dl_handle, "_nss_sss_setpwent");
+	if (ctx->setpwent == NULL) {
+		goto fail;
+	}
+
+	ctx->getpwent_r = dlsym(ctx->dl_handle, "_nss_sss_getpwent_r");
+	if (ctx->getpwent_r == NULL) {
+		goto fail;
+	}
+
+	ctx->endpwent = dlsym(ctx->dl_handle, "_nss_sss_endpwent");
+	if (ctx->endpwent == NULL) {
+		goto fail;
+	}
+
+	ctx->getgrnam_r = dlsym(ctx->dl_handle, "_nss_sss_getgrnam_r");
+	if (ctx->getgrnam_r == NULL) {
+		goto fail;
+	}
+
+	ctx->getgrgid_r = dlsym(ctx->dl_handle, "_nss_sss_getgrgid_r");
+	if (ctx->getgrgid_r == NULL) {
+		goto fail;
+	}
+
+	ctx->setgrent = dlsym(ctx->dl_handle, "_nss_sss_setgrent");
+	if (ctx->setgrent == NULL) {
+		goto fail;
+	}
+
+	ctx->getgrent_r = dlsym(ctx->dl_handle, "_nss_sss_getgrent_r");
+	if (ctx->getgrent_r == NULL) {
+		goto fail;
+	}
+
+	ctx->endgrent = dlsym(ctx->dl_handle, "_nss_sss_endgrent");
+	if (ctx->endgrent == NULL) {
+		goto fail;
+	}
+
+	ctx->initgroups_dyn = dlsym(ctx->dl_handle, "_nss_sss_initgroups_dyn");
+	if (ctx->initgroups_dyn == NULL) {
+		goto fail;
+	}
+
+	return;
+
+fail:
+	backend_nss_free_context(nss_context);
+
+	return;
+}
+
+void
+backend_nss_free_context(struct nss_ops_ctx **nss_context)
+{
+	if (nss_context == NULL) {
+		return;
+	}
+
+	if ((*nss_context)->dl_handle != NULL) {
+		dlclose((*nss_context)->dl_handle);
+	}
+
+	free((*nss_context));
+	*nss_context = NULL;
+}
+
+
+
 static Slapi_Entry **
 backend_retrieve_user_entry_from_nsswitch(char *user_name, bool_t is_uid,
 					  char *container_sdn,
@@ -315,28 +468,37 @@ backend_retrieve_user_entry_from_nsswitch(char *user_name, bool_t is_uid,
 {
 	struct passwd pwd, *result;
 	Slapi_Entry *entry, **entries;
-	int rc;
+	enum nss_status rc;
 	char *buf = NULL;
+	struct nss_ops_ctx *ctx = NULL;
+	int lerrno;
 
+	ctx = cbdata->state->nss_context;
+
+	if (ctx == NULL) {
+		return NULL;
+	}
 repeat:
 	if (cbdata->nsswitch_buffer == NULL) {
 		return NULL;
 	}
 
 	if (is_uid) {
-		rc = getpwuid_r((uid_t) atoll(user_name), &pwd,
-				cbdata->nsswitch_buffer,
-				cbdata->nsswitch_buffer_len, &result);
+		rc = ctx->getpwuid_r((uid_t) atoll(user_name), &pwd,
+				     cbdata->nsswitch_buffer,
+				     cbdata->nsswitch_buffer_len, &lerrno);
 	} else {
-		rc = getpwnam_r(user_name, &pwd,
-				cbdata->nsswitch_buffer,
-				cbdata->nsswitch_buffer_len, &result);
+		rc = ctx->getpwnam_r(user_name, &pwd,
+				     cbdata->nsswitch_buffer,
+				     cbdata->nsswitch_buffer_len, &lerrno);
 	}
-	if ((result == NULL) || (rc != 0)) {
-		if (rc == ERANGE) {
+
+	if ((rc != NSS_STATUS_SUCCESS)) {
+		if (lerrno == ERANGE) {
 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
 			if (buf != NULL) {
 				cbdata->nsswitch_buffer = buf;
+				cbdata->nsswitch_buffer_len *= 2;
 				goto repeat;
 			}
 		}
@@ -369,6 +531,7 @@ backend_make_group_entry_from_nsswitch_group(struct group *grp,
 	Slapi_Entry *entry;
 	int rc, i;
 	char *dn = NULL;
+	char *name = NULL;
 #ifdef HAVE_SSS_NSS_IDMAP
 	enum sss_id_type id_type;
 	char *sid_str;
@@ -400,7 +563,9 @@ backend_make_group_entry_from_nsswitch_group(struct group *grp,
 
 	if (grp->gr_mem) {
 		for (i=0; grp->gr_mem[i]; i++) {
-			slapi_entry_add_string(entry, "memberUid", grp->gr_mem[i]);
+			name = (char *) slapi_utf8StrToLower((unsigned char*) grp->gr_mem[i]);
+			slapi_entry_add_string(entry, "memberUid", name);
+			slapi_ch_free_string(&name);
 		}
 	}
 
@@ -437,28 +602,36 @@ backend_retrieve_group_entry_from_nsswitch(char *group_name, bool_t is_gid,
 {
 	struct group grp, *result;
 	Slapi_Entry *entry, **entries;
-	int rc;
+	enum nss_status rc;
 	char *buf = NULL;
+	struct nss_ops_ctx *ctx = NULL;
+	int lerrno = 0;
 
+	ctx = cbdata->state->nss_context;
+
+	if (ctx == NULL) {
+		return NULL;
+	}
 repeat:
 	if (cbdata->nsswitch_buffer == NULL) {
 		return NULL;
 	}
 
 	if (is_gid) {
-		rc = getgrgid_r((gid_t) atoll(group_name), &grp,
-				cbdata->nsswitch_buffer,
-				cbdata->nsswitch_buffer_len, &result);
+		rc = ctx->getgrgid_r((gid_t) atoll(group_name), &grp,
+				     cbdata->nsswitch_buffer,
+				     cbdata->nsswitch_buffer_len, &lerrno);
 	} else {
-		rc = getgrnam_r(group_name, &grp,
-				cbdata->nsswitch_buffer,
-				cbdata->nsswitch_buffer_len, &result);
+		rc = ctx->getgrnam_r(group_name, &grp,
+				     cbdata->nsswitch_buffer,
+				     cbdata->nsswitch_buffer_len, &lerrno);
 	}
-	if ((result == NULL) || (rc != 0)) {
-		if (rc == ERANGE) {
+	if ((rc != NSS_STATUS_SUCCESS)) {
+		if (lerrno == ERANGE) {
 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
 			if (buf != NULL) {
 				cbdata->nsswitch_buffer = buf;
+				cbdata->nsswitch_buffer_len *= 2;
 				goto repeat;
 			}
 		}
@@ -490,23 +663,31 @@ backend_retrieve_group_entry_from_nsswitch_by_gid(gid_t gid,
 {
 	struct group grp, *result;
 	Slapi_Entry *entry;
-	int rc;
+	enum nss_status rc;
 	char *buf = NULL;
+	struct nss_ops_ctx *ctx = NULL;
+	int lerrno = 0;
 
+	ctx = cbdata->state->nss_context;
+
+	if (ctx == NULL) {
+		return NULL;
+	}
 repeat:
 	if (cbdata->nsswitch_buffer == NULL) {
 		return NULL;
 	}
 
-	rc = getgrgid_r(gid, &grp,
-			cbdata->nsswitch_buffer,
-			cbdata->nsswitch_buffer_len, &result);
+	rc = ctx->getgrgid_r(gid, &grp,
+			     cbdata->nsswitch_buffer,
+			     cbdata->nsswitch_buffer_len, &lerrno);
 
-	if ((result == NULL) || (rc != 0)) {
-		if (rc == ERANGE) {
+	if ((rc != NSS_STATUS_SUCCESS)) {
+		if (lerrno == ERANGE) {
 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
 			if (buf != NULL) {
 				cbdata->nsswitch_buffer = buf;
+				cbdata->nsswitch_buffer_len *= 2;
 				goto repeat;
 			}
 		}
@@ -532,22 +713,32 @@ backend_retrieve_group_list_from_nsswitch(char *user_name, char *container_sdn,
 	gid_t *grouplist, *tmp_list;
 	Slapi_Entry **entries, *entry, **tmp;
 	char *buf = NULL;
-	int rc, ngroups, i, idx;
+	int i, idx;
+	struct nss_ops_ctx *ctx = NULL;
+	int lerrno = 0;
+	long int ngroups = 0;
+	long int start = 0;
+	enum nss_status rc;
 
+	ctx = cbdata->state->nss_context;
+	if (ctx == NULL) {
+		return NULL;
+	}
 repeat:
 	if (cbdata->nsswitch_buffer == NULL) {
 		return NULL;
 	}
 
-	rc = getpwnam_r(user_name, &pwd,
-			cbdata->nsswitch_buffer,
-			cbdata->nsswitch_buffer_len, &pwd_result);
+	rc = ctx->getpwnam_r(user_name, &pwd,
+			     cbdata->nsswitch_buffer,
+			     cbdata->nsswitch_buffer_len, &lerrno);
 
-	if ((pwd_result == NULL) || (rc != 0)) {
-		if (rc == ERANGE) {
+	if ((rc != NSS_STATUS_SUCCESS)) {
+		if (lerrno == ERANGE) {
 			buf = realloc(cbdata->nsswitch_buffer, cbdata->nsswitch_buffer_len * 2);
 			if (buf != NULL) {
 				cbdata->nsswitch_buffer = buf;
+				cbdata->nsswitch_buffer_len *= 2;
 				goto repeat;
 			}
 		}
@@ -559,14 +750,20 @@ repeat:
 	}
 
 	ngroups = 32;
+	start = 0;
 	grouplist = malloc(sizeof(gid_t) * ngroups);
 	if (grouplist == NULL) {
 		return NULL;
 	}
 
+	grouplist[0] = pwd.pw_gid;
+	start++;
+
 	do {
-		rc = getgrouplist(user_name, pwd.pw_gid, grouplist, &ngroups);
-		if (rc < ngroups) {
+		rc = ctx->initgroups_dyn(user_name, pwd.pw_gid,
+					 &start, &ngroups, &grouplist,
+					 -1, &lerrno);
+		if ((rc != NSS_STATUS_SUCCESS)) {
 			tmp_list = realloc(grouplist, ngroups * sizeof(gid_t));
 			if (tmp_list == NULL) {
 				free(grouplist);
@@ -574,7 +771,7 @@ repeat:
 			}
 			grouplist = tmp_list;
 		}
-	} while (rc != ngroups);
+	} while (rc != NSS_STATUS_SUCCESS);
 
 	entries = calloc(ngroups + 1, sizeof(entries[0]));
 	if (entries == NULL) {

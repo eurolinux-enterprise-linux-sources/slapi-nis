@@ -10,40 +10,40 @@
 %endif
 
 Name:		slapi-nis
-Version:	0.54
-Release:	9%{?dist}
+Version:	0.56.0
+Release:	12%{?dist}
 Summary:	NIS Server and Schema Compatibility plugins for Directory Server
 Group:		System Environment/Daemons
 License:	GPLv2
-URL:		http://slapi-nis.fedorahosted.org/
-Source0:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz
-Source1:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz.sig
-Patch0:		slapi-nis-use-slapi_entry_find_attr.patch
-Patch1:		slapi-nis-ID-views-ignore-searches-for-views-outside-the-subtrees.patch
-Patch2:		slapi-nis-schema-compat-support-ID-overrides-in-bind-callback.patch
-Patch3:		slapi-nis-use-libnss_sss.so.2-explicitly.patch
-Patch4:         slapi-nis-nss-make-sure-to-remember-the-length-of-reallocated.patch
-Patch5:         slapi-nis-nss-Make-sure-default-buffer-for-nsswitch-operations-is-.patch
-Patch6:         slapi-nis-don-t-search-in-SSSD-when-memberUid-has-no.patch
-Patch7:		slapi-nis-delay-sending-responses-from-compat-tree-a.patch
-Patch8:		slapi-nis-fix-processing-of-ID-views.patch
-Patch15:	slapi-nis-extmem-0005-slapi-nis-populate-data-trees-asynchronously-after-L.patch
-Patch16:        slapi-nis-extmem-0006-nss-force-lower-case-for-memberUid-attribute-as-per-.patch
-Patch17:        slapi-nis-extmem-0007-slapi-nis-add-support-to-resolve-external-members-of.patch
-Patch18:        slapi-nis-extmem-0008-slapi-nis-process-requests-only-when-initialization-.patch
-Patch19:        slapi-nis-extmem-0009-slapi-nis-serialize-map-cache-initialization.patch
-Patch20:        slapi-nis-extmem-0010-nis-lock-out-accounts-if-nsAccountLock-is-TRUE.patch
-Patch21:        slapi-nis-extmem-0011-idviews-bind-with-original-DN-if-ID-view-does-not-ov.patch
-Patch22:	slapi-nis-priming-0001-wrap-add-wrapped-mutex-support.patch
-Patch23:	slapi-nis-priming-0002-backend-support-backend-shutdown-for-priming-thread-.patch
-Patch24:	slapi-nis-priming-0003-nis-add-backend-shutdown-support-to-stop-priming-thr.patch
-Patch25:	slapi-nis-priming-0004-schema-compat-add-backend-shutdown-support-for-primi.patch
+URL:		http://pagure.io/slapi-nis/
+Source0:	https://releases.pagure.org/slapi-nis/slapi-nis-%{version}.tar.gz
+Source1:	https://releases.pagure.org/slapi-nis/slapi-nis-%{version}.tar.gz.sig
+Patch1:		slapi-0001-Move-advance-definition-of-backend_passwdmod_extop-b.patch
+Patch2:		slapi-0002-Initialize-ret-before-use.patch
+Patch3:		slapi-0003-slapi-nis-resolve-IPA-groups-with-fully-qualified-su.patch
+Patch4:		slapi-0004-Declare-int-backend_init_extop-for-reuse-in-plug-sch.patch
+Patch5:		slapi-0005-Double-free-on-ldap-entry-during-priming.patch
+Patch6:		slapi-0006-back-sch-do-not-clobber-target-of-the-pblock-for-idv.patch
+Patch7:		slapi-0007-back-sch-nss-for-users-with-aliases-return-alias-as-.patch
+Patch11:	slapi-0011-Move-a-helper-to-build-DN-to-a-format.c.patch
+Patch12:	slapi-0012-Add-dummy-handler-for-a-related-add-delete-modify-to.patch
+Patch13:	slapi-0013-track-changes-to-ID-overrides-and-evict-map-cache-en.patch
+Patch15:	slapi-0015-configure.ac-detect-extended-NSS-API-provided-by-SSS.patch
+Patch16:	slapi-0016-schema-compat-add-support-for-timeout-based-NSS-quer.patch
+Patch17:	slapi-0017-back-sch-cancel-memberof-retrieval-in-case-of-a-dirs.patch
+Patch18:	slapi-0017-Fix-nss_sss-callers.patch
+Patch19:	slapi-0018-Clean-up-unused-code.patch
+Patch20:	slapi-0019-Synchronize-nsswitch-backend-code-with-freeIPA.patch
+Patch21:	slapi-0020-Use-extended-SSSD-API-to-signal-that-an-entry-should.patch
+Patch22:	slapi-0100-deadlok-between-write-and-search-operation.patch
 
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires:	389-ds-base-devel, %{ldap_impl}-devel
+
+BuildRequires: libtool, automake, autoconf
+BuildRequires:	389-ds-base-devel >= 1.3.5.6, %{ldap_impl}-devel
 BuildRequires:	nspr-devel, nss-devel, /usr/bin/rpcgen
 %if 0%{?fedora} > 18 || 0%{?rhel} > 6
-BuildRequires:	libsss_nss_idmap-devel
+BuildRequires:	libsss_nss_idmap-devel >= 1.16.0-11
 %define sss_nss_opts --with-sss-nss-idmap
 %else
 %define sss_nss_opts %{nil}
@@ -59,6 +59,10 @@ BuildRequires:	libtirpc-devel
 %endif
 %if 0%{?rhel} > 0 && 0%{?rhel} < 7
 ExclusiveArch:	x86_64 %{ix86}
+%endif
+Requires: 389-ds-base >= 1.3.5.6
+%if 0%{?fedora} > 18 || 0%{?rhel} > 6
+Requires: libsss_nss_idmap >= 1.16.0-11
 %endif
 
 %description
@@ -76,7 +80,6 @@ for attributes from multiple entries in the tree.
 
 %prep
 %setup -q
-%patch0 -p1
 %patch1 -p1
 %patch2 -p1
 %patch3 -p1
@@ -84,24 +87,24 @@ for attributes from multiple entries in the tree.
 %patch5 -p1
 %patch6 -p1
 %patch7 -p1
-%patch8 -p1
-# patchset for "External membership of IPA groups"
+%patch11 -p1
+%patch12 -p1
+%patch13 -p1
 %patch15 -p1
 %patch16 -p1
 %patch17 -p1
 %patch18 -p1
 %patch19 -p1
-# "Lock out NIS entries with nsAccountLock set to TRUE"
 %patch20 -p1
-# "Support bind with non-overridden uid rdn"
 %patch21 -p1
-# "Wait for priming thread join on shutdown"
 %patch22 -p1
-%patch23 -p1
-%patch24 -p1
-%patch25 -p1
 
 %build
+libtoolize -f -c
+aclocal --force -I m4
+autoheader
+automake -f -a -i
+autoconf -f -i
 %configure --disable-static --with-tcp-wrappers --with-ldap=%{ldap_impl} \
 	--with-nsswitch --with-pam --with-pam-service=system-auth \
 	%{sss_nss_opts} %{betxn_opts}
@@ -130,23 +133,81 @@ rm -rf $RPM_BUILD_ROOT
 %{_sbindir}/nisserver-plugin-defs
 
 %changelog
+* Tue Apr 23 2019 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-12
+- Related: #1435663
+  Covscan fixes
+
+* Wed Mar 27 2019 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-11
+- Fixed: #1435663
+  Additional set of fixes for conflicts over cn=config updates
+
+* Wed Mar 27 2019 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-10
+- Fixed: #1435663
+
+* Wed Dec 05 2018 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-9
+- Fixed: #1502429
+- Update upstream reference to http://pagure.io/slapi-nis/
+
+* Fri Dec 08 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-8
+- Fixed: #1473572
+- Changes of ID overrides now force clearing of affected SSSD cache entries on IPA master
+- Related: #1473577
+- Synchronize timeout-enabled code with ipa-extdom-extop
+
+* Mon Nov 06 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-7
+- Related: #1473577
+- Force at least SSSD 1.16.0-3 for timeout-enabled NSS API
+
+* Fri Nov 03 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-6
+- Related: #1473577
+- Update configure and make files over the old release
+- Fix nss_sss usage
+
+* Fri Nov 03 2017 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-5
+- Resolves: #1473572
+- Fixed: Make changes in overrides available in the compat tree at runtime
+- Resolves: #1473577
+- Fixed: slapi-nis should use requests to SSSD with ability to cancel them with a timeout
+
+* Tue Aug 09 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-4
+- Fixed: UPN-based search for AD users does not match an entry in slapi-nis map cache
+- Resolves: #1361123
+- Fixed: slapi-nis plugin modifies DS data
+- Resolves: #1360245
+
+* Tue Jul 12 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-3
+- Fix double free in SSSD 1.14+ support
+- Resolves: #1353549
+
+* Mon Jun 20 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-2
+- Fix reported coverity issues
+- Make sure slapi-nis continue to work with SSSD 1.14 when default domain is defined
+- Resolves: #1292148
+
+* Mon Jun 20 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.56.0-1
+- New upstream release:
+  - support updating passwords for the users from the primary tree
+  - populate map cache in a separate thread to avoid blocking the DS
+- Resolves: #1292148
+
 * Tue Apr 26 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.54-9
 - Reworked priming thread shutdown support
 - Resolves: #1327197
-
+ 
 * Fri Apr 15 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.54-8
 - Wait for priming thread to finish before shutdown
 - Resolves: #1327197
 
+
 * Tue Feb 23 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.54-7
-- Resolves: #1311257
-- Resolves: #1311012
+- Resolves: #1138797
+- Resolves: #1301300
 
 * Fri Nov 13 2015 Alexander Bokovoy <abokovoy@redhat.com> - 0.54-6
 - delay sending responses from compat tree after map cache search
-- Resolves: #1281748
+- Resolves: #1273587
 - fix processing of ID views
-- Resolves: #1281750, #1281752
+- Resolves: #1277576, #1265465
 
 * Tue Jul 28 2015 Alexander Bokovoy <abokovoy@redhat.com> - 0.54-5
 - Don't lookup groups in SSSD for memberUid without @domain

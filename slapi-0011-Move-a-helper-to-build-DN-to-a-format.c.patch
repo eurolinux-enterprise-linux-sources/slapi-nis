@@ -1,0 +1,144 @@
+From 96ff6873b024718fcbb7b011eee58aab84c3086f Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Mon, 11 Sep 2017 15:32:38 +0300
+Subject: [PATCH 11/17] Move a helper to build DN to a format.c
+
+---
+ src/back-sch-nss.c | 45 ++-------------------------------------------
+ src/format.c       | 41 +++++++++++++++++++++++++++++++++++++++++
+ src/format.h       |  2 ++
+ 3 files changed, 45 insertions(+), 43 deletions(-)
+
+diff --git a/src/back-sch-nss.c b/src/back-sch-nss.c
+index db63e59..e4d027e 100644
+--- a/src/back-sch-nss.c
++++ b/src/back-sch-nss.c
+@@ -186,47 +186,6 @@ backend_search_filter_has_cn_uid(Slapi_Filter *filter, void *arg)
+ 	return SLAPI_FILTER_SCAN_CONTINUE;
+ }
+ 
+-static char *
+-backend_build_dn(const char *attribute, const char *value,
+-		 const char *container_sdn)
+-{
+-	Slapi_RDN *rdn;
+-	Slapi_DN *sdn;
+-	char *val, *dn = NULL;
+-	const char *ndn, *hexchars = "0123456789ABCDEF";
+-	int i;
+-
+-	val = malloc(strlen(value) * 3 + 1);
+-	if (val == NULL) {
+-		return NULL;
+-	}
+-	rdn = slapi_rdn_new();
+-	if (rdn == NULL) {
+-		free(val);
+-		return NULL;
+-	}
+-        for (i = 0; value[i] != '\0'; i++) {
+-		val[i * 3] = '\\';
+-		val[i * 3 + 1] = hexchars[(value[i] & 0xf0) >> 4];
+-		val[i * 3 + 2] = hexchars[value[i] & 0xf];
+-	}
+-	val[i * 3] = '\0';
+-	if (slapi_rdn_add(rdn, attribute, val) == 1) {
+-		sdn = slapi_sdn_new_dn_byval(container_sdn);
+-		if (sdn != NULL) {
+-			sdn = slapi_sdn_add_rdn(sdn, rdn);
+-			ndn = slapi_sdn_get_ndn(sdn);
+-			if (ndn != NULL) {
+-				dn = slapi_ch_strdup(ndn);
+-			}
+-			slapi_sdn_free(&sdn);
+-		}
+-	}
+-	free(val);
+-	slapi_rdn_free(&rdn);
+-	return dn;
+-}
+-
+ static Slapi_Entry *
+ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
+ 					     char *container_sdn,
+@@ -257,7 +216,7 @@ backend_make_user_entry_from_nsswitch_passwd(struct passwd *pwd,
+ 		return NULL;
+ 	}
+ 
+-	dn = backend_build_dn("uid", name, container_sdn);
++	dn = format_build_dn("uid", name, container_sdn);
+ 	if (dn == NULL) {
+ 		slapi_log_error(SLAPI_LOG_FATAL,
+ 				cbdata->state->plugin_desc->spd_id,
+@@ -556,7 +515,7 @@ backend_make_group_entry_from_nsswitch_group(struct group *grp,
+ 		return NULL;
+ 	}
+ 
+-	dn = backend_build_dn("cn", grp->gr_name, container_sdn);
++	dn = format_build_dn("cn", grp->gr_name, container_sdn);
+ 	if (dn == NULL) {
+ 		slapi_log_error(SLAPI_LOG_FATAL,
+ 				cbdata->state->plugin_desc->spd_id,
+diff --git a/src/format.c b/src/format.c
+index ee6b8f3..ae4824c 100644
+--- a/src/format.c
++++ b/src/format.c
+@@ -4825,3 +4825,44 @@ format_escape_for_filter(const char *unescaped)
+ 	}
+ 	return ret;
+ }
++
++char *
++format_build_dn(const char *attribute, const char *value,
++		const char *container_sdn)
++{
++	Slapi_RDN *rdn;
++	Slapi_DN *sdn;
++	char *val, *dn = NULL;
++	const char *ndn, *hexchars = "0123456789ABCDEF";
++	int i;
++
++	val = malloc(strlen(value) * 3 + 1);
++	if (val == NULL) {
++		return NULL;
++	}
++	rdn = slapi_rdn_new();
++	if (rdn == NULL) {
++		free(val);
++		return NULL;
++	}
++        for (i = 0; value[i] != '\0'; i++) {
++		val[i * 3] = '\\';
++		val[i * 3 + 1] = hexchars[(value[i] & 0xf0) >> 4];
++		val[i * 3 + 2] = hexchars[value[i] & 0xf];
++	}
++	val[i * 3] = '\0';
++	if (slapi_rdn_add(rdn, attribute, val) == 1) {
++		sdn = slapi_sdn_new_dn_byval(container_sdn);
++		if (sdn != NULL) {
++			sdn = slapi_sdn_add_rdn(sdn, rdn);
++			ndn = slapi_sdn_get_ndn(sdn);
++			if (ndn != NULL) {
++				dn = slapi_ch_strdup(ndn);
++			}
++			slapi_sdn_free(&sdn);
++		}
++	}
++	free(val);
++	slapi_rdn_free(&rdn);
++	return dn;
++}
+diff --git a/src/format.h b/src/format.h
+index 4cde2dc..626d4a9 100644
+--- a/src/format.h
++++ b/src/format.h
+@@ -83,4 +83,6 @@ char **format_get_data_set(struct plugin_state *state,
+ 			   unsigned int **data_lengths);
+ 
+ char *format_escape_for_filter(const char *unescaped);
++char *format_build_dn(const char *attribute, const char *value,
++		      const char *container_sdn);
+ #endif
+-- 
+2.13.6
+

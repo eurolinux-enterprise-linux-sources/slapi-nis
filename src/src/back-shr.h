@@ -39,6 +39,7 @@ void backend_shr_free_sdnlist(const Slapi_DN **sdnlist);
 
 void backend_shr_startup(struct plugin_state *state,
 			 Slapi_PBlock *pb, const char *set_filter);
+void backend_shr_shutdown(struct plugin_state *state);
 int backend_shr_betxn_postop_init(Slapi_PBlock *pb,
 				  struct plugin_state *state);
 int backend_shr_postop_init(Slapi_PBlock *pb, struct plugin_state *state);

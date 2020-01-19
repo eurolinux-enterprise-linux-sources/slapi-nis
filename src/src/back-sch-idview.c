@@ -157,6 +157,7 @@ idview_process_overrides(struct backend_search_cbdata *cbdata,
 	/* 2. If there is indeed an override, replace attribute values except for the ones that should be ignored */
 	if (override_entry != NULL) {
 		Slapi_Attr  *override_attr = NULL;
+		Slapi_Attr  *sattr = NULL;
 
 		result = slapi_entry_first_attr(override_entry, &override_attr);
 		while (result == 0) {
@@ -173,8 +174,8 @@ idview_process_overrides(struct backend_search_cbdata *cbdata,
 			if (filterout_attrs[i] == NULL) {
 				/* Replace the attribute's value with the override or
 				 * add an override value if the attribute didn't exist */
-				result = slapi_entry_attr_exists(entry, override_type);
-				if (result == 1) {
+				result = slapi_entry_attr_find(entry, override_type, &sattr);
+				if (result == 0) {
 					result = slapi_entry_attr_delete(entry, override_type);
 				}
 				result = slapi_attr_get_valueset(override_attr, &override_valueset);
@@ -290,12 +291,92 @@ idview_replace_target_dn(char **target, char **idview)
 	}
 }
 
-static int
-idview_process_filter_cb(Slapi_Filter *filter, const char *filter_type, struct berval *bval, struct backend_search_filter_config *config)
+int
+idview_replace_bval_by_override(const char *bval_usage, const char *attr_name,
+				struct berval *bval, struct backend_search_cbdata *cbdata)
 {
 	int res, i;
-	Slapi_Value *filter_val, *value, *anchor_val;
+	Slapi_Value *attr_val, *value, *anchor_val;
 	Slapi_Attr *anchor, *attr = NULL;
+	bool_t uid_override_found = FALSE;
+	bool_t anchor_override_found = FALSE;
+
+	if (cbdata->overrides == NULL) {
+		/* Only retrieve overrides for the view first time when neccessary */
+		idview_get_overrides(cbdata);
+	}
+
+	if (cbdata->overrides == NULL) {
+		return 0;
+	}
+
+	attr_val = slapi_value_new_berval(bval);
+	slapi_log_error(SLAPI_LOG_PLUGIN, cbdata->state->plugin_desc->spd_id,
+			"Searching for an override of the %s %s with %s=%*s from the overrides\n.",
+			bval_usage, attr_name, attr_name, (int) bval->bv_len, bval->bv_val);
+
+	/* If filter contains an attribute name which is overridden in the view and filter value
+	 * corresponds to the override, replace the filter by (ipaAnchorUUID=...) from the override
+	 * to point to the original because otherwise an entry will not be found in the slapi-nis map */
+	for(i=0; cbdata->overrides[i] != NULL; i++) {
+		res = slapi_entry_attr_find(cbdata->overrides[i], attr_name, &attr);
+		if ((res == 0) && (attr != NULL)) {
+			res = slapi_attr_first_value(attr, &value);
+			res = slapi_value_compare(attr, value, attr_val);
+			if (res == 0) {
+				/* For uid overrides we should have ipaOriginalUID in the override */
+				if (strcasecmp(attr_name, "uid") == 0) {
+					res = slapi_entry_attr_find(cbdata->overrides[i], IPA_IDVIEWS_ATTR_ORIGINALUID, &anchor);
+					if (res == 0) {
+						res = slapi_attr_first_value(anchor, &anchor_val);
+						slapi_ber_bvdone(bval);
+						slapi_ber_bvcpy(bval, slapi_value_get_berval(anchor_val));
+						uid_override_found = TRUE;
+						slapi_log_error(SLAPI_LOG_FATAL, cbdata->state->plugin_desc->spd_id,
+								"Overriding the %s %s with %s=%*s from the override %s\n.",
+								bval_usage, attr_name, attr_name, (int) bval->bv_len, bval->bv_val,
+								slapi_entry_get_dn_const(cbdata->overrides[i]));
+						break;
+					}
+				}
+
+				/* otherwise, use ipaAnchorUUID value */
+				res = slapi_entry_attr_find(cbdata->overrides[i], IPA_IDVIEWS_ATTR_ANCHORUUID, &anchor);
+				if (res == 0) {
+					res = slapi_attr_first_value(anchor, &anchor_val);
+					slapi_ber_bvdone(bval);
+					slapi_ber_bvcpy(bval, slapi_value_get_berval(anchor_val));
+					anchor_override_found = TRUE;
+					slapi_log_error(SLAPI_LOG_PLUGIN, cbdata->state->plugin_desc->spd_id,
+							"Overriding the %s %s with %s=%*s from the override %s\n.",
+							bval_usage, attr_name, IPA_IDVIEWS_ATTR_ANCHORUUID,
+							(int) bval->bv_len, bval->bv_val,
+							slapi_entry_get_dn_const(cbdata->overrides[i]));
+					break;
+				}
+
+			}
+		}
+	}
+
+	slapi_value_free(&attr_val);
+
+	if (uid_override_found) {
+		return 1;
+	}
+
+	if (anchor_override_found) {
+		return 2;
+	}
+
+	return 0;
+}
+
+static int
+idview_process_filter_cb(Slapi_Filter *filter, const char *filter_type,
+			 struct berval *bval, struct backend_search_filter_config *config)
+{
+	int res;
 	struct backend_search_cbdata *cbdata = (struct backend_search_cbdata *) config->callback_data;
 
 	if (cbdata == NULL || cbdata->idview == NULL) {
@@ -306,54 +387,13 @@ idview_process_filter_cb(Slapi_Filter *filter, const char *filter_type, struct b
 		return SLAPI_FILTER_SCAN_CONTINUE;
 	}
 
-	if (cbdata->overrides == NULL) {
-		/* Only retrieve overrides for the view first time when neccessary */
-		idview_get_overrides(cbdata);
+	res = idview_replace_bval_by_override("filter", filter_type, bval, cbdata);
+
+	if (res == 2) {
+		slapi_filter_changetype(filter, IPA_IDVIEWS_ATTR_ANCHORUUID);
 	}
 
-	if (cbdata->overrides == NULL) {
-		return SLAPI_FILTER_SCAN_CONTINUE;
-	}
-
-	filter_val = slapi_value_new_berval(bval);
-
-	/* If filter contains an attribute name which is overridden in the view and filter value
-	 * corresponds to the override, replace the filter by (ipaAnchorUUID=...) from the override
-	 * to point to the original because otherwise an entry will not be found in the slapi-nis map */
-	for(i=0; cbdata->overrides[i] != NULL; i++) {
-		res = slapi_entry_attr_find(cbdata->overrides[i], filter_type, &attr);
-		if ((res == 0) && (attr != NULL)) {
-			res = slapi_attr_first_value(attr, &value);
-			res = slapi_value_compare(attr, value, filter_val);
-			if (res == 0) {
-				/* For uid overrides we should have ipaOriginalUID in the override */
-				if (strcasecmp(filter_type, "uid") == 0) {
-					res = slapi_entry_attr_find(cbdata->overrides[i], IPA_IDVIEWS_ATTR_ORIGINALUID, &anchor);
-					if (res == 0) {
-						res = slapi_attr_first_value(anchor, &anchor_val);
-						slapi_ber_bvdone(bval);
-						slapi_ber_bvcpy(bval, slapi_value_get_berval(anchor_val));
-						config->override_found = TRUE;
-						break;
-					}
-				}
-
-				/* otherwise, use ipaAnchorUUID value */
-				res = slapi_entry_attr_find(cbdata->overrides[i], IPA_IDVIEWS_ATTR_ANCHORUUID, &anchor);
-				if (res == 0) {
-					res = slapi_attr_first_value(anchor, &anchor_val);
-					slapi_filter_changetype(filter, IPA_IDVIEWS_ATTR_ANCHORUUID);
-					slapi_ber_bvdone(bval);
-					slapi_ber_bvcpy(bval, slapi_value_get_berval(anchor_val));
-					config->override_found = TRUE;
-					break;
-				}
-
-			}
-		}
-	}
-
-	slapi_value_free(&filter_val);
+	config->override_found = (res != 0);
 
 	return SLAPI_FILTER_SCAN_CONTINUE;
 
@@ -366,8 +406,6 @@ idview_process_filter_cb(Slapi_Filter *filter, const char *filter_type, struct b
  *
  * Note that in reality we don't use original value of the uid/cn attribue. Instead, we use ipaAnchorUUID
  * to refer to the original entry. */
-extern char *
-slapi_filter_to_string( const struct slapi_filter *f, char *buf, size_t bufsize );
 void
 idview_replace_filter(struct backend_search_cbdata *cbdata)
 {

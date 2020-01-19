@@ -1,0 +1,141 @@
+From 0a5e61c042679679646f6f8f673028f8fbcf3ea7 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Wed, 15 Jun 2016 12:15:46 +0300
+Subject: [PATCH 03/17] slapi-nis: resolve IPA groups with fully qualified
+ suffix
+
+With SSSD 1.14+ there is a logic change to handling of a default domain
+suffix.
+
+SSSD has two different formats to handle: the input and output. The
+input format is parsed into (name,domain) tuples with the re_expression
+option and the output is formatted with the full_name_format option.
+
+Because of the way SSSD used to store the usernames in sysdb, it was
+tied to the full_name_format option, just changing the output format
+changed the way the names are stored internally. SSSD changed the cache
+to always store names in a unified format (foo@bar) and use the
+full_name_format only for output, as it should be.
+
+This changed a logic of use_fully_qualified_names=True. It now mandates
+that the /input/ contains both the name and the domain part and then
+SSSD formats the output using the full_name_format option. The
+default_domain_suffix is a hack that just appends its value to an
+unqualified input, making all queries for "foo" into "foo@bar".
+
+In new SSSD if configuration contains:
+    default_domain_suffix = win.domain
+    full_name_format = $1 # only name
+
+then a request for "foo" will internally turn into "foo@win.domain" but
+return "foo" on the output. However, queries for IPA's foo will have to
+be qualified by the admin manually like "foo@ipa.domain" otherwise sssd
+doesn't know which foo you meant.
+
+Support this logic by querying associatedDomain attribute of the
+restricted bases of the data set. IPA stores this information in the
+$SUFFIX base dn (dc=example,dc=com) and configures slapi-nis with
+restricted base set to $SUFFIX (and the plugin config). While
+associatedDomain attribute is multivalued, the $SUFFIX object always has
+a single value corresponding to the IPA domain name that is the same as
+SSSD domain suffix.
+---
+ src/back-sch.c | 41 +++++++++++++++++++++++++++++++++++++++++
+ src/back-sch.h |  1 +
+ 2 files changed, 42 insertions(+)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index bb2aa74..cdd2b3c 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -98,6 +98,7 @@ backend_set_config_free_config_contents(void *data)
+ 		slapi_sdn_free(&set_data->container_sdn);
+ 		free(set_data->rdn_format);
+ 		backend_shr_free_strlist(set_data->attribute_format);
++		slapi_ch_free_string(&set_data->associated_domain);
+ 	}
+ }
+ void
+@@ -149,6 +150,7 @@ backend_copy_set_config(const struct backend_set_data *data)
+ 	ret->check_access = data->check_access;
+ 	ret->check_nsswitch = data->check_nsswitch;
+ 	ret->nsswitch_min_id = data->nsswitch_min_id;
++	ret->associated_domain = data->associated_domain ? slapi_ch_strdup(data->associated_domain) : NULL;
+ 
+ 	if ((ret->common.group == NULL) ||
+ 	    (ret->common.set == NULL) ||
+@@ -266,6 +268,39 @@ backend_set_config_read_config(struct plugin_state *state, Slapi_Entry *e,
+ 		free(nsswitch_min_id);
+ 	}
+ 
++	ret.associated_domain = NULL;
++	if (ret.common.restrict_subtrees != NULL) {
++		Slapi_PBlock *pb = NULL;
++		int result = 0;
++		Slapi_Entry **entries = NULL;
++		int i,j;
++		for (i=0; ret.common.restrict_subtrees[i] != NULL; i++) {
++			pb = wrap_pblock_new(NULL);
++			if (pb != NULL) {
++				slapi_search_internal_set_pb_ext(pb, (Slapi_DN*) ret.common.restrict_subtrees[i], LDAP_SCOPE_BASE,
++								 "(&(objectclass=domainRelatedObject)(associatedDomain=*))",
++								 NULL, 0, NULL, NULL, state->plugin_identity, 0);
++				result = slapi_search_internal_pb(pb);
++				slapi_pblock_get(pb, SLAPI_PLUGIN_INTOP_RESULT, &result);
++				if (result == 0) {
++					slapi_pblock_get(pb, SLAPI_PLUGIN_INTOP_SEARCH_ENTRIES, &entries);
++					slapi_pblock_set(pb, SLAPI_PLUGIN_INTOP_SEARCH_ENTRIES, NULL);
++					for (j=0; entries[j] != NULL; j++) {
++						ret.associated_domain = slapi_entry_attr_get_charptr(entries[j], "associatedDomain");
++						slapi_entry_free(entries[i]);
++						if (ret.associated_domain != NULL)
++							break;
++					}
++					slapi_ch_free((void**)entries);
++				}
++			}
++			slapi_pblock_destroy(pb);
++			pb = NULL;
++			if (ret.associated_domain != NULL)
++				break;
++		}
++	}
++
+ 	*pret = backend_copy_set_config(&ret);
+ 	if (*pret == NULL) {
+ 		if (strlen(container) > 0) {
+@@ -437,6 +472,7 @@ backend_set_process_external_members(Slapi_PBlock *pb,
+ 	struct backend_staged_search staged = {0, };
+ 	struct backend_search_cbdata cbdata = {0, };
+ 	char *plugin_id = state->plugin_desc->spd_id;
++	char *gname = NULL;
+ 
+ 	is_attr_exists = slapi_entry_attr_find(e, IPA_ATTR_EXTERNAL_MEMBER, &attr) == 0;
+ 
+@@ -448,6 +484,11 @@ backend_set_process_external_members(Slapi_PBlock *pb,
+ 	 * and update entry's memberUid attribute */
+ 
+ 	staged.name = slapi_entry_attr_get_charptr(e, "cn");
++	if (data->associated_domain != NULL) {
++		gname = slapi_ch_smprintf("%s@%s", staged.name, data->associated_domain);
++		slapi_ch_free_string(&staged.name);
++		staged.name = gname;
++	}
+ 	staged.type = SCH_NSSWITCH_GROUP;
+ 	staged.search_members = FALSE;
+ 	staged.is_id = FALSE;
+diff --git a/src/back-sch.h b/src/back-sch.h
+index 72ba641..c15d1ed 100644
+--- a/src/back-sch.h
++++ b/src/back-sch.h
+@@ -38,6 +38,7 @@ struct backend_set_data {
+ 	bool_t check_access;
+ 	enum sch_search_nsswitch_t check_nsswitch;
+ 	unsigned long nsswitch_min_id;
++        char *associated_domain;
+ };
+ 
+ struct backend_entry_data {
+-- 
+2.13.6
+

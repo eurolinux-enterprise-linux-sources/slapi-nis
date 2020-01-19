@@ -63,6 +63,24 @@ struct backend_staged_search {
 	Slapi_Entry **entries;
 };
 
+/* Entry to be send to clients is cached to allow multiple threads to re-use results.
+ */
+struct cached_entry {
+	Slapi_Entry *entry;
+	PRInt32 refcount;
+	bool_t not_cached;
+};
+
+/* list of entries to actually send, sorted as a linked list
+ * Entries are references to the ones stored in a cache
+ * Before sending them out one needs to refcount the entry
+ */
+struct entries_to_send {
+	struct entries_to_send *next;
+	struct entries_to_send *prev;
+	struct cached_entry *entry;
+};
+
 /* Intercept a search request, and if it belongs to one of our compatibility
  * trees, answer from our cache before letting the default database have a
  * crack at it. */
@@ -88,6 +106,8 @@ struct backend_search_cbdata {
 	int n_entries;
 	struct backend_staged_search *staged;
 	struct backend_staged_search *cur_staged;
+	struct entries_to_send *entries_head;
+	struct entries_to_send *entries_tail;
 };
 
 struct backend_search_filter_config {
@@ -107,6 +127,22 @@ struct backend_search_filter_config {
 	void *callback_data;
 };
 
+/* OIDs of the supported extended operation */
+#define EXTOP_PASSWD_OID	"1.3.6.1.4.1.4203.1.11.1"
+
+/* ber tags for the PasswdModifyRequestValue sequence */
+#define LDAP_EXTOP_PASSMOD_TAG_USERID	0x80U
+#define LDAP_EXTOP_PASSMOD_TAG_OLDPWD	0x81U
+#define LDAP_EXTOP_PASSMOD_TAG_NEWPWD	0x82U
+
+typedef int (*IFP)();
+static int backend_passwdmod_extop(Slapi_PBlock *pb);
+typedef struct backend_extop_handlers {
+    char *oid;
+    IFP extop_fct;
+} backend_extop_handlers_t;
+
+
 /* Analyzes the filter to decide what kind of NSS search is it
  * Returns 0 on success, 1 on failure
  * struct backend_search_filter_config is populated with information about the filter
@@ -114,6 +150,11 @@ struct backend_search_filter_config {
  */
 
 int backend_analyze_search_filter(Slapi_Filter *filter, struct backend_search_filter_config *config);
+
+/* Operations against nsswitch API */
+struct nss_ops_ctx;
+void backend_nss_init_context(struct nss_ops_ctx **nss_context);
+void backend_nss_free_context(struct nss_ops_ctx **nss_context);
 
 void backend_search_nsswitch(struct backend_set_data *set_data,
 			     struct backend_search_cbdata *cbdata);
@@ -131,6 +172,10 @@ void idview_process_overrides(struct backend_search_cbdata *cbdata,
 			      Slapi_Entry *entry);
 void idview_replace_target_dn(char **target, char **idview);
 void idview_replace_filter(struct backend_search_cbdata *cbdata);
+/* Takes struct berval value of an attribute attr_name and replaces it with an override
+ * Returns 0 if no override was found, 1 for 'uid' replacement, 2 for ipaAnchorUUID replacement */
+int  idview_replace_bval_by_override(const char *bval_usage, const char *attr_name,
+				     struct berval *bval, struct backend_search_cbdata *cbdata);
 #endif
 
 #endif

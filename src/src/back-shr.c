@@ -664,50 +664,220 @@ backend_shr_get_vattr_sdnlist(struct plugin_state *state,
 	return ret;
 }
 
+struct backend_shr_data_init_cbdata {
+	struct plugin_state *state;
+	const char *filter;
+};
+
+#define PLUGIN_SCAN_DELAY 5
+
+static void *
+backend_shr_data_initialize_thread_cb(struct wrapped_thread *t)
+{
+	struct backend_shr_data_init_cbdata *cbdata = wrap_thread_arg(t);
+	Slapi_PBlock *pb = NULL;
+	struct backend_set_config_entry_add_cbdata set_cbdata;
+	int result = 0, i = 0;
+	Slapi_Entry **entries = NULL;
+	struct plugin_state *state = NULL;
+
+	/* We have to be cautious here as the thread can be executed after
+	 * the plugin received a shutdown request, thus a number of checks here. */
+	if (slapi_is_shutting_down()) {
+		return NULL;
+	}
+
+	if (cbdata == NULL) {
+		return NULL;
+	}
+
+	if ((cbdata->state == NULL) || (cbdata->state->plugin_base == NULL)) {
+		return NULL;
+	}
+
+	state = cbdata->state;
+
+	/* Scan may require consulting SSSD for external identities
+	 * therefore, we need to make sure the scan starts after ns-slapd
+	 * started to serve LDAP clients. There is no a signal for this,
+	 * so we just wait some time. */
+	DS_Sleep(PR_SecondsToInterval(PLUGIN_SCAN_DELAY));
+
+	if (slapi_is_shutting_down()) {
+		return NULL;
+	}
+
+	if (state->plugin_base == NULL) {
+		return NULL;
+	}
+
+	pb = wrap_pblock_new(NULL);
+	backend_update_params(pb, state);
+	slapi_pblock_destroy(pb);
+
+	slapi_log_error(SLAPI_LOG_PLUGIN,
+			state->plugin_desc->spd_id,
+			"searching under \"%s\" for configuration\n",
+			state->plugin_base);
+	pb = wrap_pblock_new(NULL);
+	slapi_search_internal_set_pb(pb,
+				     state->plugin_base,
+				     LDAP_SCOPE_ONELEVEL,
+				     cbdata->filter,
+				     NULL, FALSE,
+				     NULL,
+				     NULL,
+				     state->plugin_identity,
+				     0);
+	wrap_inc_call_level();
+	set_cbdata.state = state;
+	set_cbdata.pb = pb;
+
+	/* Do a search and collect found entries to avoid locking the backends */
+	if (slapi_search_internal_pb(pb) == 0) {
+		if (map_wrlock() != 0) {
+			slapi_log_error(SLAPI_LOG_FATAL,
+				state->plugin_desc->spd_id,
+				"failed to search under \"%s\" for "
+				"configuration: failed to acquire a write lock to a map\n",
+				state->plugin_base);
+			goto done_with_lock;
+		}
+		slapi_pblock_get(pb, SLAPI_PLUGIN_INTOP_RESULT, &result);
+		if (result == 0) {
+			slapi_pblock_get(pb, SLAPI_PLUGIN_INTOP_SEARCH_ENTRIES, &entries);
+			for (i = 0; entries[i] != NULL; i++) {
+				/* We may be scheduled to run over shutdown time, exit early */
+				if (slapi_is_shutting_down()) {
+					map_unlock();
+					goto done_with_lock;
+				}
+				backend_set_config_entry_add_cb(entries[i], &set_cbdata);
+			}
+		}
+		map_unlock();
+		slapi_free_search_results_internal(pb);
+	}
+	slapi_log_error(SLAPI_LOG_FATAL,
+			state->plugin_desc->spd_id,
+			"Finished plugin initialization.\n");
+
+done_with_lock:
+	wrap_dec_call_level();
+	slapi_pblock_destroy(pb);
+        if (cbdata) {
+		slapi_ch_free((void**)&cbdata);
+        }
+
+	PR_AtomicSet(&state->ready_to_serve, 1);
+        return NULL;
+}
+
+static void
+backend_shr_data_initialize_thread(time_t when, void *arg)
+{
+	struct backend_shr_data_init_cbdata *cbdata = (struct backend_shr_data_init_cbdata *)arg;
+	PRThread *thread = NULL;
+
+	if (slapi_is_shutting_down()) {
+		return;
+	}
+
+        if (cbdata->state->priming_mutex == NULL) {
+            /* This mutex is allocated at plugin startup
+             * Without this mutex we can not enforce that shutdown wait for priming completion
+             * This is better to skip the priming
+             */
+            slapi_log_error(SLAPI_LOG_FATAL, cbdata->state->plugin_desc->spd_id, "priming_mutex not initialized. Priming fails\n");
+            return;
+        }
+        wrap_mutex_lock(cbdata->state->priming_mutex);
+
+        if (!cbdata->state->start_priming_thread) {
+            slapi_log_error(SLAPI_LOG_PLUGIN, cbdata->state->plugin_desc->spd_id,
+                "Likely a shutdown occurred before we started \n");
+            goto done;
+        }
+
+        cbdata->state->priming_tid = wrap_start_thread(&backend_shr_data_initialize_thread_cb, arg);
+        if (cbdata->state->priming_tid == NULL) {
+		slapi_log_error(SLAPI_LOG_FATAL,
+				cbdata->state->plugin_desc->spd_id,
+				"unable to create compatibility tree scan thread!\n");
+	} else {
+		slapi_log_error(SLAPI_LOG_FATAL,
+				cbdata->state->plugin_desc->spd_id,
+				"%s tree scan will start in about %d seconds!\n",
+				cbdata->state->plugin_desc->spd_id, PLUGIN_SCAN_DELAY);
+	}
+
+done:
+        wrap_mutex_unlock(cbdata->state->priming_mutex);
+}
+
 /* Scan for the list of configured groups and sets. */
 void
 backend_shr_startup(struct plugin_state *state,
 		    Slapi_PBlock *parent_pb,
 		    const char *filter)
 {
-	Slapi_PBlock *pb;
-	struct backend_set_config_entry_add_cbdata set_cbdata;
+	struct backend_shr_data_init_cbdata *cbdata = NULL;
 
-	backend_update_params(parent_pb, state);
-
-	slapi_log_error(SLAPI_LOG_PLUGIN,
-			state->plugin_desc->spd_id,
-			"searching under \"%s\" for configuration\n",
-			state->plugin_base);
-	pb = wrap_pblock_new(parent_pb);
-	slapi_search_internal_set_pb(pb,
-				     state->plugin_base,
-				     LDAP_SCOPE_ONELEVEL,
-				     filter,
-				     NULL, FALSE,
-				     NULL,
-				     NULL,
-				     state->plugin_identity,
-				     0);
-	if (map_wrlock() != 0) {
-		slapi_log_error(SLAPI_LOG_PLUGIN,
+	if (slapi_is_shutting_down()) {
+		slapi_log_error(SLAPI_LOG_FATAL,
 				state->plugin_desc->spd_id,
-				"failed to search under \"%s\" for "
-				"configuration: failed to acquire a lock\n",
-				state->plugin_base);
-		goto done_with_lock;
+				"task for populating compatibility tree will "
+				"not be created due to upcoming server shutdown\n");
+		return;
 	}
-	set_cbdata.state = state;
-	set_cbdata.pb = pb;
-	slapi_search_internal_callback_pb(pb, &set_cbdata,
-					  NULL,
-					  backend_set_config_entry_add_cb,
-					  NULL);
-	map_unlock();
-done_with_lock:
-	slapi_pblock_destroy(pb);
+
+	cbdata = (struct backend_shr_data_init_cbdata *) 
+		 slapi_ch_malloc(sizeof(struct backend_shr_data_init_cbdata));
+
+	if (cbdata == NULL) {
+		slapi_log_error(SLAPI_LOG_FATAL,
+				state->plugin_desc->spd_id,
+				"failed to create a task for populating "
+				"compatibility tree\n");
+		return;
+	}
+
+	PR_AtomicSet(&state->ready_to_serve, 0);
+	cbdata->state = state;
+	cbdata->filter = filter;
+
+	/* Schedule running a callback that will create a thread
+	 * but make sure it is called a first thing when event loop is created */
+	slapi_eq_once(backend_shr_data_initialize_thread,
+		      cbdata, PR_SecondsToInterval(PLUGIN_SCAN_DELAY));
+
+	slapi_log_error(SLAPI_LOG_FATAL,
+			cbdata->state->plugin_desc->spd_id,
+			"scheduled %s tree scan in about %d seconds after the server startup!\n",
+			state->plugin_desc->spd_id, PLUGIN_SCAN_DELAY);
+
+	return;
+
 }
 
+void
+backend_shr_shutdown(struct plugin_state *state)
+{
+    /* Make sure the priming thread is stopped or will not start
+     * Note: priming_mutex will not be freed because the priming thread
+     * may access it independently of the server/plugin shutdown
+     */
+    wrap_mutex_lock(state->priming_mutex);
+    state->start_priming_thread = 0; /* prevent spawing of priming thread */
+    if (state->priming_tid == NULL) {
+        /* priming thread has not yet started or failed to start */
+        slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+                "At shutdown, priming thread not yet started or failed to start\n");
+    } else {
+        wrap_stop_thread(state->priming_tid);
+    }
+    wrap_mutex_unlock(state->priming_mutex);
+}
 /* Process a set configuration directory entry.  Pull out the group and set
  * names which are specified in the entry and delete each in turn. */
 int
@@ -1720,6 +1890,11 @@ backend_shr_add_cb(Slapi_PBlock *pb)
 		/* The plugin was not actually started. */
 		return 0;
 	}
+	if (cbdata.state->ready_to_serve == 0) {
+		/* No data yet, ignore */
+		return 0;
+	}
+
 	slapi_pblock_get(pb, SLAPI_ENTRY_POST_OP, &cbdata.e);
 	slapi_pblock_get(pb, SLAPI_ADD_TARGET, &dn);
 	slapi_pblock_get(pb, SLAPI_PLUGIN_OPRETURN, &rc);
@@ -2130,6 +2305,10 @@ backend_shr_modify_cb(Slapi_PBlock *pb)
 		/* The plugin was not actually started. */
 		return 0;
 	}
+	if (cbdata.state->ready_to_serve == 0) {
+		/* No data yet, ignore */
+		return 0;
+	}
 	slapi_pblock_get(pb, SLAPI_MODIFY_TARGET, &dn);
 	slapi_pblock_get(pb, SLAPI_MODIFY_MODS, &cbdata.mods);
 	slapi_pblock_get(pb, SLAPI_ENTRY_PRE_OP, &cbdata.e_pre);
@@ -2227,7 +2406,7 @@ backend_shr_modify_cb(Slapi_PBlock *pb)
 		backend_set_config_entry_add_cb(cbdata.e_post, &set_cbdata);
 	}
 	/* Lastly, if the entry is our own entry, re-read parameters. */
-	sdn = slapi_sdn_new_dn_byref(cbdata.state->plugin_base);
+	sdn = slapi_sdn_new_dn_byval(cbdata.state->plugin_base);
 	if (sdn != NULL) {
 		if ((strcmp(slapi_entry_get_ndn(cbdata.e_pre),
 			    slapi_sdn_get_ndn(sdn)) == 0) ||
@@ -2330,6 +2509,10 @@ backend_shr_modrdn_cb(Slapi_PBlock *pb)
 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &cbdata.state);
 	if (cbdata.state->plugin_base == NULL) {
 		/* The plugin was not actually started. */
+		return 0;
+	}
+	if (cbdata.state->ready_to_serve == 0) {
+		/* No data yet, ignore */
 		return 0;
 	}
 	slapi_pblock_get(pb, SLAPI_ENTRY_PRE_OP, &cbdata.e_pre);
@@ -2469,6 +2652,10 @@ backend_shr_delete_cb(Slapi_PBlock *pb)
 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &cbdata.state);
 	if (cbdata.state->plugin_base == NULL) {
 		/* The plugin was not actually started. */
+		return 0;
+	}
+	if (cbdata.state->ready_to_serve == 0) {
+		/* No data yet, ignore */
 		return 0;
 	}
 	slapi_pblock_get(pb, SLAPI_ENTRY_PRE_OP, &cbdata.e);

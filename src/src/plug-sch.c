@@ -44,6 +44,7 @@
 
 #ifdef HAVE_DIRSRV_SLAPI_PLUGIN_H
 #include <nspr.h>
+#include <plhash.h>
 #include <nss.h>
 #include <dirsrv/slapi-plugin.h>
 #else
@@ -52,6 +53,7 @@
 
 #include "backend.h"
 #include "back-shr.h"
+#include "back-sch.h"
 #include "map.h"
 #include "plugin.h"
 #include "portmap.h"
@@ -63,6 +65,7 @@
 #define PLUGIN_BETXN_POSTOP_ID PLUGIN_ID "-betxn_postop"
 #define PLUGIN_POSTOP_ID PLUGIN_ID "-postop"
 #define PLUGIN_INTERNAL_POSTOP_ID PLUGIN_ID "-internal-postop"
+#define PLUGIN_PRE_EXTOP_ID PLUGIN_ID "-extop-preop"
 
 /* the module initialization function */
 static Slapi_PluginDesc
@@ -99,20 +102,62 @@ plugin_startup(Slapi_PBlock *pb)
 {
 	/* Populate the maps and data. */
 	struct plugin_state *state;
+	Slapi_Entry *plugin_entry = NULL;
+	Slapi_DN *pluginsdn = NULL;
+
 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
-	slapi_pblock_get(pb, SLAPI_TARGET_DN, &state->plugin_base);
-	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
-			"configuration entry is %s%s%s\n",
-			state->plugin_base ? "\"" : "",
-			state->plugin_base ? state->plugin_base : "NULL",
-			state->plugin_base ? "\"" : "");
-	/* Populate the tree of fake entries. */
-	backend_startup(pb, state);
+	slapi_pblock_get(pb, SLAPI_TARGET_SDN, &pluginsdn);
+	/* plugin base need to be duplicated because it will be destroyed
+	 * when pblock is destroyed but we need to use it in a separate thread */
+	if (NULL == pluginsdn || 0 == slapi_sdn_get_ndn_len(pluginsdn)) {
+        slapi_log_error(SLAPI_LOG_FATAL, state->plugin_desc->spd_id,
+                        "scheman compat plugin_startup: unable to retrieve plugin DN\n");
+		return -1;
+
+    } else {
+        state->plugin_base = slapi_ch_strdup(slapi_sdn_get_dn(pluginsdn));
+		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+				"configuration entry is %s%s%s\n",
+				state->plugin_base ? "\"" : "",
+				state->plugin_base ? state->plugin_base : "NULL",
+				state->plugin_base ? "\"" : "");
+    }
+
 	state->pam_lock = wrap_new_rwlock();
+	backend_nss_init_context((struct nss_ops_ctx**) &state->nss_context);
+	if ((slapi_pblock_get(pb, SLAPI_PLUGIN_CONFIG_ENTRY, &plugin_entry) == 0) &&
+	    (plugin_entry != NULL)) {
+		state->use_entry_cache = backend_shr_get_vattr_boolean(state, plugin_entry,
+									"slapi-entry-cache",
+									1);
+	}
+	state->cached_entries_lock = wrap_new_rwlock();
+	wrap_rwlock_wrlock(state->cached_entries_lock);
+	state->cached_entries = PL_NewHashTable(0, PL_HashString, PL_CompareStrings, PL_CompareValues, 0, 0);
+	wrap_rwlock_unlock(state->cached_entries_lock);
+	/* Populate the tree of fake entries. */
+        if (state->priming_mutex == NULL) {
+            state->priming_mutex = wrap_new_mutex();
+            state->start_priming_thread = 1;
+        }
+	backend_startup(pb, state);
 	/* Note that the plugin is ready to go. */
 	slapi_log_error(SLAPI_LOG_PLUGIN, plugin_description.spd_id,
 			"plugin startup completed\n");
 	return 0;
+}
+
+static PRIntn
+remove_cached_entries_cb(PLHashEntry *he, PRIntn i, void *arg)
+{
+	struct cached_entry *e = (struct cached_entry*) he->value;
+	if (e != NULL) {
+		if (e->entry != NULL) {
+			slapi_entry_free(e->entry);
+		}
+		slapi_ch_free((void **) &e);
+	}
+	return HT_ENUMERATE_REMOVE;
 }
 
 static int
@@ -120,12 +165,39 @@ plugin_shutdown(Slapi_PBlock *pb)
 {
 	struct plugin_state *state;
 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
+        backend_shutdown(state);
 	map_done(state);
 	wrap_free_rwlock(state->pam_lock);
 	state->pam_lock = NULL;
-	state->plugin_base = NULL;
+	backend_nss_free_context((struct nss_ops_ctx**) &state->nss_context);
+	if (state->cached_entries != NULL) {
+		wrap_rwlock_wrlock(state->cached_entries_lock);
+		PL_HashTableEnumerateEntries(state->cached_entries, remove_cached_entries_cb, NULL);
+		PL_HashTableDestroy(state->cached_entries);
+		state->cached_entries = NULL;
+		wrap_rwlock_unlock(state->cached_entries_lock);
+		wrap_free_rwlock(state->cached_entries_lock);
+		state->cached_entries_lock = NULL;
+	}
+	if (state->plugin_base != NULL) {
+		slapi_ch_free((void **)&state->plugin_base);
+	}
 	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
 			"plugin shutdown completed\n");
+	return 0;
+}
+static int
+schema_compat_plugin_init_extop(Slapi_PBlock *pb)
+{
+	slapi_pblock_set(pb, SLAPI_PLUGIN_VERSION, SLAPI_PLUGIN_VERSION_03);
+	slapi_pblock_set(pb, SLAPI_PLUGIN_DESCRIPTION, &plugin_description);
+	slapi_pblock_set(pb, SLAPI_PLUGIN_PRIVATE, global_plugin_state);
+	if (backend_init_extop(pb, global_plugin_state) == -1) {
+		slapi_log_error(SLAPI_LOG_PLUGIN,
+				global_plugin_state->plugin_desc->spd_id,
+				"error registering extop hooks\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -286,6 +358,15 @@ schema_compat_plugin_init(Slapi_PBlock *pb)
 		return -1;
 	}
 #endif
+	if (slapi_register_plugin("preextendedop", TRUE,
+				  "schema_compat_plugin_init_extop",
+				  schema_compat_plugin_init_extop,
+				  PLUGIN_PRE_EXTOP_ID, NULL,
+				  state->plugin_identity) != 0) {
+		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+				"error registering extop plugin\n");
+		return -1;
+	}
 	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
 			"registered plugin hooks\n");
 	global_plugin_state = NULL;

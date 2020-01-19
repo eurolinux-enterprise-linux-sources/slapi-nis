@@ -1,0 +1,2242 @@
+From 8b10ea485f7964ea53fb9ab1bd71105a2da96f84 Mon Sep 17 00:00:00 2001
+From: Thierry Bordaz <tbordaz@redhat.com>
+Date: Wed, 13 Sep 2017 12:39:08 +0200
+Subject: [PATCH 01/13] Bug 1435663: deadlock between write and search
+ operation in schema-compat plugin
+
+Problem description:
+    Schema compat is a betxn pre/post op plugin managing maps.
+    The maps are protected by a RW lock.
+    A typical deadlock scenario is when a read thread (SRCH) holding
+    the map lock needs a ressource (DB page) acquired by an
+    write thread (MOD/ADD/DEL..) and that write thread needs to update
+    the map and so acquire the map lock.
+
+    So far we have been able to reduce the frequency of those scenarios
+    (but not eliminate them) by restricting the scope of operations
+    that need to acquire the lock.
+
+    But scoping is not systematically possible like described in
+    https://bugzilla.redhat.com/show_bug.cgi?id=1435663#c16
+
+Fix description:
+    The fix implements a plugin RW reentrant lock 'plugin_lock'.
+    To do this it uses a thread private variables (thread_plugin_lock_status and
+    thread_plugin_lock_count to remember the current status of the lock
+    (free, read_acquired, write_acquired).
+
+    Then for write operations (even if it is out of the scope of SC), the lock is acquired in write
+    in the BE_preop operation (note not in BETXN_preop) and only released
+    in the BE_postop (postop/bepostop).
+    So a write operation acquires (exclusive) the maps lock before acquiring DB pages.
+    So read and write operation will acquire locks in the same order.
+
+    Design is https://www.freeipa.org/page/V4_slapi_nis_locking
+
+Signed-off-by: Thierry Bordaz <tbordaz@redhat.com>
+---
+ src/back-sch.c | 221 ++++++++++++++++++++++++++++++++++++++++
+ src/back-shr.c |  94 +++++++++++++++++
+ src/back-shr.h |  16 +++
+ src/map.c      | 271 +++++++++++++++++++++++++++++++++++++++++++++++--
+ src/map.h      |   3 +
+ src/plug-sch.c |  52 ++++++++++
+ 6 files changed, 651 insertions(+), 6 deletions(-)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 4612051..9313cd5 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -2304,6 +2304,157 @@ backend_betxn_pre_write_cb(Slapi_PBlock *pb)
+ 	return state->use_be_txns ? backend_write_cb(pb, state) : 0;
+ }
+ 
++static int
++backend_be_pre_write_cb(Slapi_PBlock *pb) {
++    int ret;
++    int lock_status;
++    int lock_count;
++    struct plugin_state *state;
++
++    slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
++
++    if (wrap_get_call_level() > 0) {
++        return 0;
++    }
++    if (state->ready_to_serve == 0) {
++        /* No data to serve yet */
++        return 0;
++    }
++    if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
++        return 0;
++    }
++
++
++    wrap_inc_call_level();
++
++    lock_status = get_plugin_monitor_status();
++    lock_count = get_plugin_monitor_count();
++    if (lock_status == MAP_RWLOCK_UNINIT) {
++        return 0;
++    }
++
++    if (lock_status == MAP_RWLOCK_FREE) {
++        set_plugin_monitor_count(1);
++
++        if (plugin_wrlock() == 0) {
++            ret = 0;
++        } else {
++            slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++                    "backend_be_pre_write_cb: unable to acquire write lock\n");
++            ret = -1;
++        }
++#if DEBUG_MAP_LOCK
++        slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                "backend_be_pre_write_cb: (%p) MAP_RWLOCK_FREE -> MAP_WLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++#endif
++    } else {
++        set_plugin_monitor_count(lock_count + 1);
++#if DEBUG_MAP_LOCK
++        slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                        "backend_be_pre_write_cb: (%p)  %s --> MAP_WLOCK_HELD  : count=%d\n",
++                PR_GetCurrentThread(),
++                (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD": "MAP_RLOCK_HELD",
++                lock_count + 1);
++#endif
++        ret = 0;
++        if (lock_status == MAP_RLOCK_HELD) {
++            /* lock is already acquired in read */
++
++#if DEBUG_MAP_LOCK
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map backend_be_pre_write_cb: weird situation map lock is held in read and now required in write mode\n");
++#endif
++            /* First free the lock held in read */
++            ret = plugin_unlock();
++            if (ret) {
++                    slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                            "backend_be_pre_write_cb: fail to unlock plugin lock (%d)\n", ret);
++            }
++
++            /* Second acquire it in write */
++            ret = plugin_wrlock();
++            if (ret) {
++                    slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                            "backend_be_pre_write_cb: fail to write lock plugin lock (%d)\n", ret);
++            }
++        }
++    }
++
++    set_plugin_monitor_status(MAP_WLOCK_HELD);
++    wrap_dec_call_level();
++
++    return ret;
++}
++
++static int
++backend_be_post_write_cb(Slapi_PBlock *pb)
++{
++        int ret;
++        int lock_status;
++        int lock_count;
++        struct plugin_state *state;
++
++        slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
++
++	if (wrap_get_call_level() > 0) {
++		return 0;
++	}
++	if (state->ready_to_serve == 0) {
++		/* No data to serve yet */
++		return 0;
++	}
++        if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
++            return 0;
++        }
++
++	wrap_inc_call_level();
++
++        lock_status = get_plugin_monitor_status();
++        lock_count = get_plugin_monitor_count();
++        if (lock_status == MAP_RWLOCK_UNINIT) {
++            return 0;
++        }
++
++        if (lock_count == 1) {
++            set_plugin_monitor_status(MAP_RWLOCK_FREE);
++            if (plugin_unlock() == 0) {
++                ret = 0;
++            } else {
++                slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++                                "backend_be_post_write_cb: unable to release write lock\n");
++                ret = -1;
++            }
++#if DEBUG_MAP_LOCK
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"backend_be_post_write_cb: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
++                        PR_GetCurrentThread(),
++                        (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                        0);
++#endif
++        }
++        if (lock_count >= 1) {
++           set_plugin_monitor_count(lock_count - 1);
++#if DEBUG_MAP_LOCK
++            if (lock_count > 1) {
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                                    "backend_be_post_write_cb: (%p)  keep %s : count=%d\n",
++                            PR_GetCurrentThread(),
++                            (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                            lock_count - 1);
++            } else {
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                                    "backend_be_post_write_cb: (%p)  is now %s : count=%d\n",
++                            PR_GetCurrentThread(),
++                            "MAP_RWLOCK_FREE",
++                            lock_count - 1);
++            }
++#endif
++        }
++	wrap_dec_call_level();
++
++	return ret;
++}
++
+ #ifdef USE_PAM
+ static int
+ backend_bind_cb_pam(Slapi_PBlock *pb, const char *username, char *ndn)
+@@ -2814,6 +2965,42 @@ backend_init_betxn_preop(Slapi_PBlock *pb, struct plugin_state *state)
+ 	return 0;
+ }
+ 
++int
++backend_init_be_preop(Slapi_PBlock *pb, struct plugin_state *state)
++{
++	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++	                "hooking up bet preoperation callbacks\n");
++	/* Intercept write requests and return an insufficient-access error for
++	 * attempts to write to anything we're managing. */
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_PRE_ADD_FN,
++			     backend_be_pre_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn pre add callback\n");
++		return -1;
++	}
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_PRE_MODIFY_FN,
++			     backend_be_pre_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn pre modify callback\n");
++		return -1;
++	}
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_PRE_MODRDN_FN,
++			     backend_be_pre_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn pre modrdn callback\n");
++		return -1;
++	}
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_PRE_DELETE_FN,
++			     backend_be_pre_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn pre delete callback\n");
++		return -1;
++	}
++	/* We don't hook abandonment requests. */
++	/* We don't hook unbind requests. */
++	return 0;
++}
++
+ int
+ backend_init_betxn_postop(Slapi_PBlock *pb, struct plugin_state *state)
+ {
+@@ -2821,6 +3008,40 @@ backend_init_betxn_postop(Slapi_PBlock *pb, struct plugin_state *state)
+ 			"hooking up betxn postoperation callbacks\n");
+ 	return backend_shr_betxn_postop_init(pb, state);
+ }
++
++
++int
++backend_init_be_postop(Slapi_PBlock *pb, struct plugin_state *state)
++{
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_POST_ADD_FN,
++			     backend_be_post_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn post add callback\n");
++		return -1;
++	}
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_POST_MODIFY_FN,
++			     backend_be_post_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn post modify "
++				"callback\n");
++		return -1;
++	}
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_POST_MODRDN_FN,
++			     backend_be_post_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn post modrdn "
++				"callback\n");
++		return -1;
++	}
++	if (slapi_pblock_set(pb, SLAPI_PLUGIN_BE_POST_DELETE_FN,
++			     backend_be_post_write_cb) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error hooking up betxn post delete "
++				"callback\n");
++		return -1;
++	}
++	return 0;
++}
+ #endif
+ 
+ int
+diff --git a/src/back-shr.c b/src/back-shr.c
+index a7ea92f..a227b0a 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -2866,3 +2866,97 @@ backend_shr_internal_postop_init(Slapi_PBlock *pb, struct plugin_state *state)
+ 	}
+ 	return 0;
+ }
++
++static unsigned int thread_dummy;
++static unsigned int thread_plugin_lock_status;
++static int thread_plugin_lock_count;
++
++void
++init_map_lock(void)
++{
++    /* The plugin lock is initialized as free */
++    slapi_log_error(SLAPI_LOG_FATAL, "init_plugin_lock",
++            "thread_id = %p\n", PR_GetCurrentThread());
++
++    PR_NewThreadPrivateIndex (&thread_dummy, NULL);
++    PR_NewThreadPrivateIndex(&thread_plugin_lock_status, NULL);
++    PR_NewThreadPrivateIndex(&thread_plugin_lock_count, NULL);
++
++    slapi_log_error(SLAPI_LOG_FATAL, "init_plugin_lock",
++            "thread_plugin_lock_status = %d\n", thread_plugin_lock_status);
++    slapi_log_error(SLAPI_LOG_FATAL, "init_map_lock",
++            "thread_plugin_lock_count = %d\n", thread_plugin_lock_count);
++}
++
++int
++rw_monitor_enabled(void)
++{
++    if (thread_plugin_lock_status)
++        return (int) MAP_MONITOR_ENABLED;
++    else
++        return (int) MAP_MONITOR_DISABLED;
++}
++
++int
++get_plugin_monitor_status(void)
++{
++    int ret;
++
++    if (thread_plugin_lock_status)
++        ret = (int) PR_GetThreadPrivate(thread_plugin_lock_status);
++    else
++        ret = (int) MAP_RWLOCK_UNINIT;
++#if DEBUG_MAP_LOCK
++    slapi_log_error(SLAPI_LOG_FATAL, "get_plugin_monitor_status",
++            "lock_status = %d (%p)\n", ret, PR_GetCurrentThread());
++#endif
++    return ret;
++}
++
++void
++set_plugin_monitor_status(int lock_status)
++{
++#if DEBUG_MAP_LOCK
++    slapi_log_error(SLAPI_LOG_FATAL, "set_plugin_monitor_status",
++            "lock_status = %d --> %d (%p)\n", get_plugin_monitor_status(), (int) lock_status, PR_GetCurrentThread());
++#endif
++
++    if (thread_plugin_lock_status)
++        PR_SetThreadPrivate(thread_plugin_lock_status, (void *) lock_status);
++    else
++        PR_SetThreadPrivate(thread_plugin_lock_status, (void *) MAP_RWLOCK_UNINIT);
++
++
++}
++
++int
++get_plugin_monitor_count(void)
++{
++    int ret;
++
++    if (thread_plugin_lock_count)
++        ret = (int) PR_GetThreadPrivate(thread_plugin_lock_count);
++    else
++        ret = (int) MAP_RWLOCK_UNINIT;
++#if DEBUG_MAP_LOCK
++    slapi_log_error(SLAPI_LOG_FATAL, "get_plugin_monitor_count",
++            "lock_count = %d (%p)\n", ret, PR_GetCurrentThread());
++#endif
++    return ret;
++}
++
++void
++set_plugin_monitor_count(int lock_count)
++{
++#if DEBUG_MAP_LOCK
++    slapi_log_error(SLAPI_LOG_FATAL, "set_plugin_monitor_count",
++            "lock_count = %d --> %d (%p)\n", get_plugin_monitor_count(), (int) lock_count, PR_GetCurrentThread());
++#endif
++
++    if (thread_plugin_lock_count)
++        PR_SetThreadPrivate(thread_plugin_lock_count, (void *) lock_count);
++    else
++        PR_SetThreadPrivate(thread_plugin_lock_count, (void *) MAP_RWLOCK_UNINIT);
++
++
++}
+diff --git a/src/back-shr.h b/src/back-shr.h
+index 2caea5d..8c68b4f 100644
+--- a/src/back-shr.h
++++ b/src/back-shr.h
+@@ -22,6 +22,22 @@
+ #ifndef back_shr_h
+ #define back_shr_h
+ 
++#define DEBUG_MAP_LOCK 0
++#define MAP_MONITOR_DISABLED 0
++#define MAP_MONITOR_ENABLED 1
++
++#define MAP_RWLOCK_UNINIT 3
++#define MAP_WLOCK_HELD    2
++#define MAP_RLOCK_HELD    1
++#define MAP_RWLOCK_FREE   0
++int  rw_monitor_enabled(void);
++int  get_plugin_monitor_status(void);
++void set_plugin_monitor_status(int lock_status);
++int  get_plugin_monitor_count(void);
++void set_plugin_monitor_count(int lock_count);
++void init_map_lock(void);
++
++
+ struct plugin_state;
+ 
+ void backend_shr_free_server_name(struct plugin_state *state, char *master);
+diff --git a/src/map.c b/src/map.c
+index ff18fcf..db9e093 100644
+--- a/src/map.c
++++ b/src/map.c
+@@ -45,6 +45,7 @@
+ #include "map.h"
+ #include "portmap.h"
+ #include "wrap.h"
++#include "back-shr.h"
+ 
+ /* The singleton for the cache. */
+ static struct {
+@@ -91,6 +92,7 @@ static struct {
+ 	} *domains;
+ 	int n_domains;
+ 	struct wrapped_rwlock *lock;
++        struct wrapped_rwlock *plugin_lock;
+ } map_data;
+ 
+ static void *
+@@ -1155,6 +1157,10 @@ map_init(struct slapi_pblock *pb, struct plugin_state *state)
+ 	if (map_data.lock == NULL) {
+ 		return -1;
+ 	}
++        map_data.plugin_lock = wrap_new_rwlock();
++	if (map_data.plugin_lock == NULL) {
++		return -1;
++	}
+ 	return 0;
+ }
+ 
+@@ -1193,6 +1199,8 @@ map_done(struct plugin_state *state)
+ 	}
+ 	wrap_free_rwlock(map_data.lock);
+ 	map_data.lock = NULL;
++        wrap_free_rwlock(map_data.plugin_lock);
++        map_data.plugin_lock = NULL;
+ }
+ 
+ int
+@@ -1219,19 +1227,270 @@ map_data_get_map_size(struct plugin_state *state,
+ }
+ 
+ int
+-map_rdlock(void)
++plugin_rdlock(void)
+ {
+-	return wrap_rwlock_rdlock(map_data.lock);
++	return wrap_rwlock_rdlock(map_data.plugin_lock);
+ }
+ 
+ int
+-map_wrlock(void)
++plugin_wrlock(void)
+ {
+-	return wrap_rwlock_wrlock(map_data.lock);
++	return wrap_rwlock_wrlock(map_data.plugin_lock);
+ }
+ 
+ int
+-map_unlock(void)
++plugin_unlock(void)
+ {
+-	return wrap_rwlock_unlock(map_data.lock);
++	return wrap_rwlock_unlock(map_data.plugin_lock);
+ }
++
++int
++map_rdlock(void)
++{
++	int lock_status;
++        int lock_count;
++	int rc = 0;
++
++	if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
++		/* This is not initialized used the old way */
++		slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"map rdlock: old way MAP_MONITOR_DISABLED\n");
++		return wrap_rwlock_rdlock(map_data.lock);
++	}
++
++
++	lock_status = get_plugin_monitor_status();
++        lock_count = get_plugin_monitor_count();
++
++#if DEBUG_MAP_LOCK
++	slapi_log_error(SLAPI_LOG_FATAL, "map_rdlock",
++				"thread_id = %p (call level = %d)\n", PR_GetCurrentThread(), wrap_get_call_level());
++#endif
++	if (lock_status == MAP_RWLOCK_UNINIT) {
++		/* This is not initialized used the old way */
++		slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"map rdlock: old way lock_status == MAP_RWLOCK_UNINIT\n");
++		return wrap_rwlock_rdlock(map_data.lock);
++	}
++
++	if (lock_status == MAP_RWLOCK_FREE) {
++		/* The plugin lock is free, acquire it */
++#if DEBUG_MAP_LOCK
++		slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"map rdlock: current lock_status == MAP_RWLOCK_FREE\n");
++#endif
++                set_plugin_monitor_status(MAP_RLOCK_HELD);
++                set_plugin_monitor_count(1);
++#if DEBUG_MAP_LOCK
++                if (lock_count != 0) {
++                    slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"map rdlock: (%p) ALERT !!!   count was %d -> 1\n", PR_GetCurrentThread(), lock_count);
++                }
++#endif
++
++                /* Acquire the slapi plugin in read */
++                rc = plugin_rdlock();
++                if (rc) {
++			slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
++			return rc;
++		}
++#if DEBUG_MAP_LOCK
++		slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++#endif
++		rc = wrap_rwlock_rdlock(map_data.lock);
++		if (rc) {
++			slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"Fail to acquire map lock in read (%d)\n", rc);
++                        plugin_unlock();
++			return rc;
++		}
++		return 0;
++	}
++
++#if DEBUG_MAP_LOCK
++        slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                            "map rdlock: (%p) was already hold %s : count=%d > %d!!!\n",
++                            PR_GetCurrentThread(),
++                            (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD": "MAP_RLOCK_HELD",
++                            lock_count, lock_count + 1);
++#endif
++        set_plugin_monitor_count(lock_count + 1);
++	return 0;
++ }
++
++int
++map_wrlock(void)
++{
++	int lock_status;
++        int lock_count;
++	int rc = 0;
++
++	if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
++		/* This is not initialized used the old way */
++		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: old way MAP_MONITOR_DISABLED\n");
++		return wrap_rwlock_wrlock(map_data.lock);
++	}
++
++	lock_status = get_plugin_monitor_status();
++        lock_count = get_plugin_monitor_count();
++
++#if DEBUG_MAP_LOCK
++	slapi_log_error(SLAPI_LOG_FATAL, "map wrlock",
++				"thread_id = %p (call level = %d)\n", PR_GetCurrentThread(), wrap_get_call_level());
++#endif
++	if (lock_status == MAP_RWLOCK_UNINIT) {
++		/* This is not initialized used the old way */
++		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: old way lock_status == MAP_LOCK_UNINIT\n");
++
++		return wrap_rwlock_wrlock(map_data.lock);
++	}
++
++	if (lock_status == MAP_RWLOCK_FREE) {
++		/* The lock is free, acquire it */
++#if DEBUG_MAP_LOCK
++		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: current lock_status == MAP_LOCK_FREE\n");
++#endif
++
++                set_plugin_monitor_count(1);
++#if DEBUG_MAP_LOCK
++                if (lock_count != 0) {
++                    slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: (%p) ALERT !!!   count was %d --> 1\n", PR_GetCurrentThread(), lock_count);
++                }
++#endif
++                /* Acquire the slapi plugin in write */
++                rc = plugin_wrlock();
++                if (rc) {
++			slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++				"map wrlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
++			return rc;
++		}
++#if DEBUG_MAP_LOCK
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                        "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++#endif
++
++		rc = wrap_rwlock_wrlock(map_data.lock);
++		if (rc) {
++			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD : fail to write lock map lock (%d)\n", PR_GetCurrentThread(), rc);
++                        plugin_unlock();
++			goto common;
++		}
++	} else {
++            set_plugin_monitor_count(lock_count + 1);
++#if DEBUG_MAP_LOCK
++		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: (%p)  %s --> MAP_WLOCK_HELD  : count=%d\n",
++                        PR_GetCurrentThread(),
++                        (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD": "MAP_RLOCK_HELD",
++                        lock_count + 1);
++#endif
++
++            if (lock_status == MAP_RLOCK_HELD) {
++                /* lock is already acquired in read */
++#if DEBUG_MAP_LOCK
++		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: weird situation map lock is held in read and now required in write mode\n");
++#endif
++		/* First free the lock held in read */
++		rc = plugin_unlock();
++		if (rc) {
++			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: fail to unlock plugin lock (%d)\n", rc);
++			goto common;
++		}
++
++		/* Second acquire it in write */
++		rc = plugin_wrlock();
++		if (rc) {
++			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map wrlock: fail to write lock plugin lock (%d)\n", rc);
++			goto common;
++		}
++            }
++        }
++
++common:
++    set_plugin_monitor_status(MAP_WLOCK_HELD);
++    return rc;
++ }
++
++int
++map_unlock(void)
++ {
++	int lock_status;
++        int lock_count;
++	int rc = 0;
++
++	if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
++		/* This is not initialized used the old way */
++		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map_unlock: old way MAP_MONITOR_DISABLED\n");
++		return wrap_rwlock_unlock(map_data.lock);
++	}
++
++	lock_status = get_plugin_monitor_status();
++        lock_count = get_plugin_monitor_count();
++
++#if DEBUG_MAP_LOCK
++	slapi_log_error(SLAPI_LOG_FATAL, "map_unlock",
++				"thread_id = %p (call level = %d)\n", PR_GetCurrentThread(), wrap_get_call_level());
++#endif
++	if (lock_status == MAP_RWLOCK_UNINIT) {
++		/* This is not initialized used the old way */
++		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map_unlock: old way lock_status == MAP_RWLOCK_UNINIT\n");
++
++		return wrap_rwlock_unlock(map_data.lock);
++	}
++
++        if (lock_count == 1) {
++            set_plugin_monitor_status(MAP_RWLOCK_FREE);
++            rc = plugin_unlock();
++            if (rc) {
++			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map unlock: fail to unlock plugin lock (%d)\n", rc);
++			goto common;
++            }
++#if DEBUG_MAP_LOCK
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++				"map_unlock: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
++                        PR_GetCurrentThread(),
++                        (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                        0);
++#endif
++            rc = wrap_rwlock_unlock(map_data.lock);
++            if (rc) {
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "map_unlock: fail to unlock map lock (%d)\n", rc);
++                goto common;
++            }
++        }
++        if (lock_count >= 1) {
++            set_plugin_monitor_count(lock_count - 1);
++#if DEBUG_MAP_LOCK
++            if (lock_count > 1) {
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                                    "map_unlock: (%p)  keep %s : count=%d\n",
++                            PR_GetCurrentThread(),
++                            (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                            lock_count - 1);
++            } else {
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                                    "map_unlock: (%p)  is now %s : count=%d\n",
++                            PR_GetCurrentThread(),
++                            "MAP_RWLOCK_FREE",
++                            lock_count - 1);
++            }
++#endif
++        }
++
++common:
++       return rc;
++ }
+diff --git a/src/map.h b/src/map.h
+index f5b0405..4d7cb8c 100644
+--- a/src/map.h
++++ b/src/map.h
+@@ -115,6 +115,9 @@ int map_data_get_domain_size(struct plugin_state *state,
+ 			     const char *domain_name);
+ int map_data_get_map_size(struct plugin_state *state,
+ 			  const char *domain_name, const char *map_name);
++int plugin_rdlock(void);
++int plugin_wrlock(void);
++int plugin_unlock(void);
+ int map_rdlock(void);
+ int map_wrlock(void);
+ int map_unlock(void);
+diff --git a/src/plug-sch.c b/src/plug-sch.c
+index 0c20a07..2d9c75b 100644
+--- a/src/plug-sch.c
++++ b/src/plug-sch.c
+@@ -62,6 +62,8 @@
+ #define PLUGIN_ID "schema-compat-plugin"
+ #define PLUGIN_PREOP_ID PLUGIN_ID "-preop"
+ #define PLUGIN_BETXN_PREOP_ID PLUGIN_ID "-betxn_preop"
++#define PLUGIN_BE_POSTOP_ID PLUGIN_ID "-be_postop"
++#define PLUGIN_BE_PREOP_ID PLUGIN_ID "-be_preop"
+ #define PLUGIN_BETXN_POSTOP_ID PLUGIN_ID "-betxn_postop"
+ #define PLUGIN_POSTOP_ID PLUGIN_ID "-postop"
+ #define PLUGIN_INTERNAL_POSTOP_ID PLUGIN_ID "-internal-postop"
+@@ -258,6 +260,35 @@ schema_compat_plugin_init_betxn_postop(Slapi_PBlock *pb)
+ 	}
+ 	return 0;
+ }
++static int
++schema_compat_plugin_init_bepreop(Slapi_PBlock *pb)
++{
++	slapi_pblock_set(pb, SLAPI_PLUGIN_VERSION, SLAPI_PLUGIN_VERSION_03);
++	slapi_pblock_set(pb, SLAPI_PLUGIN_DESCRIPTION, &plugin_description);
++	slapi_pblock_set(pb, SLAPI_PLUGIN_PRIVATE, global_plugin_state);
++	if (backend_init_be_preop(pb, global_plugin_state) == -1) {
++		slapi_log_error(SLAPI_LOG_PLUGIN,
++				global_plugin_state->plugin_desc->spd_id,
++				"error registering be preoperation hooks\n");
++		return -1;
++	}
++	return 0;
++}
++static int
++schema_compat_plugin_init_bepostop(Slapi_PBlock *pb)
++{
++	slapi_pblock_set(pb, SLAPI_PLUGIN_VERSION, SLAPI_PLUGIN_VERSION_03);
++	slapi_pblock_set(pb, SLAPI_PLUGIN_DESCRIPTION, &plugin_description);
++	slapi_pblock_set(pb, SLAPI_PLUGIN_PRIVATE, global_plugin_state);
++	if (backend_init_be_postop(pb, global_plugin_state) == -1) {
++		slapi_log_error(SLAPI_LOG_PLUGIN,
++				global_plugin_state->plugin_desc->spd_id,
++				"error registering be postoperation "
++				"hooks\n");
++		return -1;
++	}
++	return 0;
++}
+ #endif
+ static int
+ schema_compat_plugin_init_postop(Slapi_PBlock *pb)
+@@ -300,6 +331,9 @@ schema_compat_plugin_init(Slapi_PBlock *pb)
+ 				"error setting up plugin\n");
+ 		return -1;
+ 	}
++
++    init_map_lock();
++
+ 	/* Read global configuration. */
+ 	if ((slapi_pblock_get(pb, SLAPI_PLUGIN_CONFIG_ENTRY,
+ 			      &plugin_entry) == 0) &&
+@@ -341,6 +375,15 @@ schema_compat_plugin_init(Slapi_PBlock *pb)
+ 				"error registering betxn preoperation plugin\n");
+ 		return -1;
+ 	}
++        if (slapi_register_plugin("bepreoperation", TRUE,
++				  "schema_compat_plugin_init_bepreop",
++				  schema_compat_plugin_init_bepreop,
++				  PLUGIN_BE_PREOP_ID, NULL,
++				  state->plugin_identity) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error registering betxn preoperation plugin\n");
++		return -1;
++	}
+ #endif
+ 	if (slapi_register_plugin("postoperation", TRUE,
+ 				  "schema_compat_plugin_init_postop",
+@@ -370,6 +413,15 @@ schema_compat_plugin_init(Slapi_PBlock *pb)
+ 				"error registering betxn postoperation plugin\n");
+ 		return -1;
+ 	}
++        if (slapi_register_plugin("bepostoperation", TRUE,
++				  "schema_compat_plugin_init_bepostop",
++				  schema_compat_plugin_init_bepostop,
++				  PLUGIN_BE_POSTOP_ID, NULL,
++				  state->plugin_identity) != 0) {
++		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++				"error registering betxn postoperation plugin\n");
++		return -1;
++	}
+ #endif
+ 	if (slapi_register_plugin("preextendedop", TRUE,
+ 				  "schema_compat_plugin_init_extop",
+-- 
+2.21.0
+
+
+From 1ccbfe23576ac78f81d85bcce246e4d72cfc4db8 Mon Sep 17 00:00:00 2001
+From: Thierry Bordaz <tbordaz@redhat.com>
+Date: Wed, 3 Apr 2019 10:55:38 +0200
+Subject: [PATCH 07/13] Bug 1694263: Fix thread private variable initialization
+
+Fix description:
+	The initialization of the thread private variable was buggy.
+	The private variable required an allocated struct (per thread).
+	The struct is allocated on demand (during get/set) when the
+	retrieved (PR_GetThreadPrivate) struct is NULL.
+
+Signed-off-by: Thierry Bordaz <tbordaz@redhat.com>
+---
+ src/back-sch.c |  85 ++++++++---------
+ src/back-shr.c | 138 ++++++++++++++++++++++------
+ src/map.c      | 244 ++++++++++++++++++++++++-------------------------
+ 3 files changed, 274 insertions(+), 193 deletions(-)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 9313cd5..2d0bad0 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -2306,7 +2306,7 @@ backend_betxn_pre_write_cb(Slapi_PBlock *pb)
+ 
+ static int
+ backend_be_pre_write_cb(Slapi_PBlock *pb) {
+-    int ret;
++    int ret = 0;
+     int lock_status;
+     int lock_count;
+     struct plugin_state *state;
+@@ -2334,6 +2334,7 @@ backend_be_pre_write_cb(Slapi_PBlock *pb) {
+     }
+ 
+     if (lock_status == MAP_RWLOCK_FREE) {
++        /* This thread does not hold the map lock */
+         set_plugin_monitor_count(1);
+ 
+         if (plugin_wrlock() == 0) {
+@@ -2389,12 +2390,12 @@ backend_be_pre_write_cb(Slapi_PBlock *pb) {
+ static int
+ backend_be_post_write_cb(Slapi_PBlock *pb)
+ {
+-        int ret;
+-        int lock_status;
+-        int lock_count;
+-        struct plugin_state *state;
++    int ret = 0;
++    int lock_status;
++    int lock_count;
++    struct plugin_state *state;
+ 
+-        slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
++    slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
+ 
+ 	if (wrap_get_call_level() > 0) {
+ 		return 0;
+@@ -2409,47 +2410,47 @@ backend_be_post_write_cb(Slapi_PBlock *pb)
+ 
+ 	wrap_inc_call_level();
+ 
+-        lock_status = get_plugin_monitor_status();
+-        lock_count = get_plugin_monitor_count();
+-        if (lock_status == MAP_RWLOCK_UNINIT) {
+-            return 0;
+-        }
++    lock_status = get_plugin_monitor_status();
++    lock_count = get_plugin_monitor_count();
++    if (lock_status == MAP_RWLOCK_UNINIT) {
++        return 0;
++    }
+ 
+-        if (lock_count == 1) {
+-            set_plugin_monitor_status(MAP_RWLOCK_FREE);
+-            if (plugin_unlock() == 0) {
+-                ret = 0;
+-            } else {
+-                slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+-                                "backend_be_post_write_cb: unable to release write lock\n");
+-                ret = -1;
+-            }
+-#if DEBUG_MAP_LOCK
+-            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"backend_be_post_write_cb: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
+-                        PR_GetCurrentThread(),
+-                        (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+-                        0);
+-#endif
++    if (lock_count == 1) {
++        set_plugin_monitor_status(MAP_RWLOCK_FREE);
++        if (plugin_unlock() == 0) {
++            ret = 0;
++        } else {
++            slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++                    "backend_be_post_write_cb: unable to release write lock\n");
++            ret = -1;
+         }
+-        if (lock_count >= 1) {
+-           set_plugin_monitor_count(lock_count - 1);
+ #if DEBUG_MAP_LOCK
+-            if (lock_count > 1) {
+-                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                                    "backend_be_post_write_cb: (%p)  keep %s : count=%d\n",
+-                            PR_GetCurrentThread(),
+-                            (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+-                            lock_count - 1);
+-            } else {
+-                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                                    "backend_be_post_write_cb: (%p)  is now %s : count=%d\n",
+-                            PR_GetCurrentThread(),
+-                            "MAP_RWLOCK_FREE",
+-                            lock_count - 1);
+-            }
++        slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                "backend_be_post_write_cb: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
++                PR_GetCurrentThread(),
++                (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                0);
+ #endif
++    }
++    if (lock_count >= 1) {
++        set_plugin_monitor_count(lock_count - 1);
++#if DEBUG_MAP_LOCK
++        if (lock_count > 1) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "backend_be_post_write_cb: (%p)  keep %s : count=%d\n",
++                    PR_GetCurrentThread(),
++                    (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                    lock_count - 1);
++        } else {
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "backend_be_post_write_cb: (%p)  is now %s : count=%d\n",
++                    PR_GetCurrentThread(),
++                    "MAP_RWLOCK_FREE",
++                    lock_count - 1);
+         }
++#endif
++    }
+ 	wrap_dec_call_level();
+ 
+ 	return ret;
+diff --git a/src/back-shr.c b/src/back-shr.c
+index a227b0a..920c135 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -37,6 +37,7 @@
+ #endif
+ 
+ #include <rpc/xdr.h>
++#include <nspr4/prtypes.h>
+ #include "../yp/yp.h"
+ 
+ #ifdef HAVE_TCPD_H
+@@ -2867,31 +2868,61 @@ backend_shr_internal_postop_init(Slapi_PBlock *pb, struct plugin_state *state)
+ 	return 0;
+ }
+ 
+-static unsigned int thread_dummy;
++PRBool use_lock_status = PR_FALSE;
+ static unsigned int thread_plugin_lock_status;
+-static int thread_plugin_lock_count;
++PRBool use_lock_count = PR_FALSE;
++static unsigned int thread_plugin_lock_count;
++/*
++ * https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSPR/Reference/PR_NewThreadPrivateIndex
++ * It is called each time:
++ *  - PR_SetThreadPrivate is call with a not NULL private value
++ *  - on thread exit
++ */
++static void
++lock_status_free(void *ptr)
++{
++    int *lock_status = ptr;
++    if (lock_status) {
++        slapi_ch_free((void **)&lock_status);
++    }
++}
++static void
++lock_count_free(void *ptr)
++{
++    int *lock_count = ptr;
++    if (lock_count) {
++        slapi_ch_free((void **)&lock_count);
++    }
++}
+ 
+ void
+ init_map_lock(void)
+ {
++#if DEBUG_MAP_LOCK
+     /* The plugin lock is initialized as free */
+     slapi_log_error(SLAPI_LOG_FATAL, "init_plugin_lock",
+             "thread_id = %p\n", PR_GetCurrentThread());
++#endif
+ 
+-    PR_NewThreadPrivateIndex (&thread_dummy, NULL);
+-    PR_NewThreadPrivateIndex(&thread_plugin_lock_status, NULL);
+-    PR_NewThreadPrivateIndex(&thread_plugin_lock_count, NULL);
++    if (PR_NewThreadPrivateIndex(&thread_plugin_lock_status, lock_status_free) == PR_SUCCESS) {
++        use_lock_status = PR_TRUE;
++    }
++    if (PR_NewThreadPrivateIndex(&thread_plugin_lock_count, lock_count_free) == PR_SUCCESS) {
++        use_lock_count = PR_TRUE;
++    }
+ 
++#if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "init_plugin_lock",
+             "thread_plugin_lock_status = %d\n", thread_plugin_lock_status);
+     slapi_log_error(SLAPI_LOG_FATAL, "init_map_lock",
+             "thread_plugin_lock_count = %d\n", thread_plugin_lock_count);
++#endif
+ }
+ 
+ int
+ rw_monitor_enabled(void)
+ {
+-    if (thread_plugin_lock_status)
++    if (use_lock_status)
+         return (int) MAP_MONITOR_ENABLED;
+     else
+         return (int) MAP_MONITOR_DISABLED;
+@@ -2902,13 +2933,27 @@ get_plugin_monitor_status(void)
+ {
+     int ret;
+ 
+-    if (thread_plugin_lock_status)
+-        ret = (int) PR_GetThreadPrivate(thread_plugin_lock_status);
+-    else
++    if (use_lock_status) {
++        int *lock_status_p;
++        lock_status_p = (int *) PR_GetThreadPrivate(thread_plugin_lock_status);
++        if (lock_status_p == NULL) {
++            /* if it was not initialized then allocates a structure
++             * that will be private to that thread.
++             * Later when the structure is retrieved (PR_GetThreadPrivate), the
++             * content of the structure can be read/write without allocating
++             * this private structure PR_SetThreadPrivate.
++             * So this branch is processed one time per each thread
++             */
++            lock_status_p = (int *) slapi_ch_calloc(1, sizeof (int));
++            PR_SetThreadPrivate(thread_plugin_lock_status, (void *) lock_status_p);
++            *lock_status_p = MAP_RWLOCK_FREE;
++        }
++        ret = *lock_status_p;
++    } else
+         ret = (int) MAP_RWLOCK_UNINIT;
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "get_plugin_monitor_status",
+-            "lock_status = %d (%p)\n", ret, PR_GetCurrentThread());
++            "(%s) lock_status = %d (%p)\n", use_lock_status ? "TRUE" : "FALSE", ret, PR_GetCurrentThread());
+ #endif
+     return ret;
+ }
+@@ -2918,15 +2963,26 @@ set_plugin_monitor_status(int lock_status)
+ {
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "set_plugin_monitor_status",
+-            "lock_status = %d --> %d (%p)\n", get_plugin_monitor_status(), (int) lock_status, PR_GetCurrentThread());
++            "(%s) lock_status = %d --> %d (%p)\n", use_lock_status ? "TRUE" : "FALSE", get_plugin_monitor_status(), (int) lock_status, PR_GetCurrentThread());
+ #endif
+ 
+-    if (thread_plugin_lock_status)
+-        PR_SetThreadPrivate(thread_plugin_lock_status, (void *) lock_status);
+-    else
+-        PR_SetThreadPrivate(thread_plugin_lock_status, (void *) MAP_RWLOCK_UNINIT);
+-
+-
++    if (use_lock_status) {
++        int *lock_status_p;
++
++        lock_status_p = (int *) PR_GetThreadPrivate(thread_plugin_lock_status);
++        if (lock_status_p == NULL) {
++            /* if it was not initialized then allocates a structure
++             * that will be private to that thread.
++             * Later when the structure is retrieved (PR_GetThreadPrivate), the
++             * content of the structure can be read/write without allocating
++             * this private structure PR_SetThreadPrivate.
++             * So this branch is processed one time per each thread
++             */
++            lock_status_p = (int *) slapi_ch_calloc(1, sizeof (int));
++            PR_SetThreadPrivate(thread_plugin_lock_status, (void *) lock_status_p);
++        }
++        *lock_status_p = lock_status;
++    }
+ }
+ 
+ int
+@@ -2934,13 +2990,27 @@ get_plugin_monitor_count(void)
+ {
+     int ret;
+ 
+-    if (thread_plugin_lock_count)
+-        ret = (int) PR_GetThreadPrivate(thread_plugin_lock_count);
+-    else
++    if (use_lock_count) {
++        int *lock_count;
++        lock_count = (int *) PR_GetThreadPrivate(thread_plugin_lock_count);
++        if (lock_count == NULL) {
++            /* if it was not initialized then allocates a structure
++             * that will be private to that thread.
++             * Later when the structure is retrieved (PR_GetThreadPrivate), the
++             * content of the structure can be read/write without allocating
++             * this private structure PR_SetThreadPrivate.
++             * So this branch is processed one time per each thread
++             */
++            lock_count = (int *) slapi_ch_calloc(1, sizeof (int));
++            PR_SetThreadPrivate(thread_plugin_lock_count, (void *) lock_count);
++            *lock_count = 0;
++        }
++        ret = *lock_count;
++    } else
+         ret = (int) MAP_RWLOCK_UNINIT;
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "get_plugin_monitor_count",
+-            "lock_count = %d (%p)\n", ret, PR_GetCurrentThread());
++            "(%s) lock_count = %d (%p)\n", use_lock_count ? "TRUE" : "FALSE", ret, PR_GetCurrentThread());
+ #endif
+     return ret;
+ }
+@@ -2950,13 +3020,23 @@ set_plugin_monitor_count(int lock_count)
+ {
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "set_plugin_monitor_count",
+-            "lock_count = %d --> %d (%p)\n", get_plugin_monitor_count(), (int) lock_count, PR_GetCurrentThread());
++            "(%s) lock_count = %d --> %d (%p)\n", use_lock_count ? "TRUE" : "FALSE", get_plugin_monitor_count(), (int) lock_count, PR_GetCurrentThread());
+ #endif
+-
+-    if (thread_plugin_lock_count)
+-        PR_SetThreadPrivate(thread_plugin_lock_count, (void *) lock_count);
+-    else
+-        PR_SetThreadPrivate(thread_plugin_lock_count, (void *) MAP_RWLOCK_UNINIT);
+-
+-
++    if (use_lock_count) {
++        int *lock_count_p;
++
++        lock_count_p = (int *) PR_GetThreadPrivate(thread_plugin_lock_count);
++        if (lock_count_p == NULL) {
++            /* if it was not initialized then allocates a structure
++             * that will be private to that thread.
++             * Later when the structure is retrieved (PR_GetThreadPrivate), the
++             * content of the structure can be read/write without allocating
++             * this private structure PR_SetThreadPrivate.
++             * So this branch is processed one time per each thread
++             */
++            lock_count_p = (int *) slapi_ch_calloc(1, sizeof (int));
++            PR_SetThreadPrivate(thread_plugin_lock_count, (void *) lock_count_p);
++        }
++        *lock_count_p = lock_count;
++    }
+ }
+diff --git a/src/map.c b/src/map.c
+index db9e093..e953925 100644
+--- a/src/map.c
++++ b/src/map.c
+@@ -1248,7 +1248,7 @@ int
+ map_rdlock(void)
+ {
+ 	int lock_status;
+-        int lock_count;
++    int lock_count;
+ 	int rc = 0;
+ 
+ 	if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
+@@ -1260,7 +1260,7 @@ map_rdlock(void)
+ 
+ 
+ 	lock_status = get_plugin_monitor_status();
+-        lock_count = get_plugin_monitor_count();
++    lock_count = get_plugin_monitor_count();
+ 
+ #if DEBUG_MAP_LOCK
+ 	slapi_log_error(SLAPI_LOG_FATAL, "map_rdlock",
+@@ -1271,52 +1271,52 @@ map_rdlock(void)
+ 		slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+ 				"map rdlock: old way lock_status == MAP_RWLOCK_UNINIT\n");
+ 		return wrap_rwlock_rdlock(map_data.lock);
+-	}
++    }
+ 
+-	if (lock_status == MAP_RWLOCK_FREE) {
+-		/* The plugin lock is free, acquire it */
++    if (lock_status == MAP_RWLOCK_FREE) {
++        /* The plugin lock is free, acquire it */
+ #if DEBUG_MAP_LOCK
+-		slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-				"map rdlock: current lock_status == MAP_RWLOCK_FREE\n");
++        slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                "map rdlock: current lock_status == MAP_RWLOCK_FREE\n");
+ #endif
+-                set_plugin_monitor_status(MAP_RLOCK_HELD);
+-                set_plugin_monitor_count(1);
++        set_plugin_monitor_status(MAP_RLOCK_HELD);
++        set_plugin_monitor_count(1);
+ #if DEBUG_MAP_LOCK
+-                if (lock_count != 0) {
+-                    slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-				"map rdlock: (%p) ALERT !!!   count was %d -> 1\n", PR_GetCurrentThread(), lock_count);
+-                }
++        if (lock_count != 0) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                    "map rdlock: (%p) ALERT !!!   count was %d -> 1\n", PR_GetCurrentThread(), lock_count);
++        }
+ #endif
+ 
+-                /* Acquire the slapi plugin in read */
+-                rc = plugin_rdlock();
+-                if (rc) {
+-			slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-				"map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
+-			return rc;
+-		}
++        /* Acquire the slapi plugin in read */
++        rc = plugin_rdlock();
++        if (rc) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                    "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
++            return rc;
++        }
+ #if DEBUG_MAP_LOCK
+-		slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-				"map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++        slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
+ #endif
+-		rc = wrap_rwlock_rdlock(map_data.lock);
+-		if (rc) {
+-			slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-				"Fail to acquire map lock in read (%d)\n", rc);
+-                        plugin_unlock();
+-			return rc;
+-		}
+-		return 0;
+-	}
++        rc = wrap_rwlock_rdlock(map_data.lock);
++        if (rc) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                    "Fail to acquire map lock in read (%d)\n", rc);
++            plugin_unlock();
++            return rc;
++        }
++        return 0;
++    }
+ 
+ #if DEBUG_MAP_LOCK
+-        slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                            "map rdlock: (%p) was already hold %s : count=%d > %d!!!\n",
+-                            PR_GetCurrentThread(),
+-                            (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD": "MAP_RLOCK_HELD",
+-                            lock_count, lock_count + 1);
++    slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++            "map rdlock: (%p) was already hold %s : count=%d > %d!!!\n",
++            PR_GetCurrentThread(),
++            (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : "MAP_RLOCK_HELD",
++            lock_count, lock_count + 1);
+ #endif
+-        set_plugin_monitor_count(lock_count + 1);
++    set_plugin_monitor_count(lock_count + 1);
+ 	return 0;
+  }
+ 
+@@ -1324,7 +1324,7 @@ int
+ map_wrlock(void)
+ {
+ 	int lock_status;
+-        int lock_count;
++    int lock_count;
+ 	int rc = 0;
+ 
+ 	if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
+@@ -1335,7 +1335,7 @@ map_wrlock(void)
+ 	}
+ 
+ 	lock_status = get_plugin_monitor_status();
+-        lock_count = get_plugin_monitor_count();
++    lock_count = get_plugin_monitor_count();
+ 
+ #if DEBUG_MAP_LOCK
+ 	slapi_log_error(SLAPI_LOG_FATAL, "map wrlock",
+@@ -1356,65 +1356,65 @@ map_wrlock(void)
+ 				"map wrlock: current lock_status == MAP_LOCK_FREE\n");
+ #endif
+ 
+-                set_plugin_monitor_count(1);
++        set_plugin_monitor_count(1);
+ #if DEBUG_MAP_LOCK
+-                if (lock_count != 0) {
+-                    slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map wrlock: (%p) ALERT !!!   count was %d --> 1\n", PR_GetCurrentThread(), lock_count);
+-                }
++        if (lock_count != 0) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "map wrlock: (%p) ALERT !!!   count was %d --> 1\n", PR_GetCurrentThread(), lock_count);
++        }
+ #endif
+-                /* Acquire the slapi plugin in write */
+-                rc = plugin_wrlock();
+-                if (rc) {
+-			slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-				"map wrlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
+-			return rc;
+-		}
++        /* Acquire the slapi plugin in write */
++        rc = plugin_wrlock();
++        if (rc) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                    "map wrlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
++            return rc;
++        }
+ #if DEBUG_MAP_LOCK
+-                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                        "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++        slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
+ #endif
+ 
+-		rc = wrap_rwlock_wrlock(map_data.lock);
+-		if (rc) {
+-			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD : fail to write lock map lock (%d)\n", PR_GetCurrentThread(), rc);
+-                        plugin_unlock();
+-			goto common;
+-		}
+-	} else {
+-            set_plugin_monitor_count(lock_count + 1);
++        rc = wrap_rwlock_wrlock(map_data.lock);
++        if (rc) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD : fail to write lock map lock (%d)\n", PR_GetCurrentThread(), rc);
++            plugin_unlock();
++            goto common;
++        }
++    } else {
++        set_plugin_monitor_count(lock_count + 1);
+ #if DEBUG_MAP_LOCK
+-		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map wrlock: (%p)  %s --> MAP_WLOCK_HELD  : count=%d\n",
+-                        PR_GetCurrentThread(),
+-                        (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD": "MAP_RLOCK_HELD",
+-                        lock_count + 1);
++        slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                "map wrlock: (%p)  %s --> MAP_WLOCK_HELD  : count=%d\n",
++                PR_GetCurrentThread(),
++                (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : "MAP_RLOCK_HELD",
++                lock_count + 1);
+ #endif
+ 
+-            if (lock_status == MAP_RLOCK_HELD) {
+-                /* lock is already acquired in read */
++        if (lock_status == MAP_RLOCK_HELD) {
++            /* lock is already acquired in read */
+ #if DEBUG_MAP_LOCK
+-		slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map wrlock: weird situation map lock is held in read and now required in write mode\n");
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "map wrlock: weird situation map lock is held in read and now required in write mode\n");
+ #endif
+-		/* First free the lock held in read */
+-		rc = plugin_unlock();
+-		if (rc) {
+-			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map wrlock: fail to unlock plugin lock (%d)\n", rc);
+-			goto common;
+-		}
++            /* First free the lock held in read */
++            rc = plugin_unlock();
++            if (rc) {
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                        "map wrlock: fail to unlock plugin lock (%d)\n", rc);
++                goto common;
++            }
+ 
+-		/* Second acquire it in write */
+-		rc = plugin_wrlock();
+-		if (rc) {
+-			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map wrlock: fail to write lock plugin lock (%d)\n", rc);
+-			goto common;
+-		}
++            /* Second acquire it in write */
++            rc = plugin_wrlock();
++            if (rc) {
++                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                        "map wrlock: fail to write lock plugin lock (%d)\n", rc);
++                goto common;
+             }
+         }
++    }
+ 
+ common:
+     set_plugin_monitor_status(MAP_WLOCK_HELD);
+@@ -1425,7 +1425,7 @@ int
+ map_unlock(void)
+  {
+ 	int lock_status;
+-        int lock_count;
++    int lock_count;
+ 	int rc = 0;
+ 
+ 	if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
+@@ -1436,7 +1436,7 @@ map_unlock(void)
+ 	}
+ 
+ 	lock_status = get_plugin_monitor_status();
+-        lock_count = get_plugin_monitor_count();
++    lock_count = get_plugin_monitor_count();
+ 
+ #if DEBUG_MAP_LOCK
+ 	slapi_log_error(SLAPI_LOG_FATAL, "map_unlock",
+@@ -1448,48 +1448,48 @@ map_unlock(void)
+ 				"map_unlock: old way lock_status == MAP_RWLOCK_UNINIT\n");
+ 
+ 		return wrap_rwlock_unlock(map_data.lock);
+-	}
++    }
+ 
+-        if (lock_count == 1) {
+-            set_plugin_monitor_status(MAP_RWLOCK_FREE);
+-            rc = plugin_unlock();
+-            if (rc) {
+-			slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map unlock: fail to unlock plugin lock (%d)\n", rc);
+-			goto common;
+-            }
+-#if DEBUG_MAP_LOCK
++    if (lock_count == 1) {
++        set_plugin_monitor_status(MAP_RWLOCK_FREE);
++        rc = plugin_unlock();
++        if (rc) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-				"map_unlock: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
+-                        PR_GetCurrentThread(),
+-                        (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+-                        0);
++                    "map unlock: fail to unlock plugin lock (%d)\n", rc);
++            goto common;
++        }
++#if DEBUG_MAP_LOCK
++        slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                "map_unlock: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
++                PR_GetCurrentThread(),
++                (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                0);
+ #endif
+-            rc = wrap_rwlock_unlock(map_data.lock);
+-            if (rc) {
+-                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++        rc = wrap_rwlock_unlock(map_data.lock);
++        if (rc) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                     "map_unlock: fail to unlock map lock (%d)\n", rc);
+-                goto common;
+-            }
++            goto common;
+         }
+-        if (lock_count >= 1) {
+-            set_plugin_monitor_count(lock_count - 1);
++    }
++    if (lock_count >= 1) {
++        set_plugin_monitor_count(lock_count - 1);
+ #if DEBUG_MAP_LOCK
+-            if (lock_count > 1) {
+-                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                                    "map_unlock: (%p)  keep %s : count=%d\n",
+-                            PR_GetCurrentThread(),
+-                            (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+-                            lock_count - 1);
+-            } else {
+-                slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                                    "map_unlock: (%p)  is now %s : count=%d\n",
+-                            PR_GetCurrentThread(),
+-                            "MAP_RWLOCK_FREE",
+-                            lock_count - 1);
+-            }
+-#endif
++        if (lock_count > 1) {
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "map_unlock: (%p)  keep %s : count=%d\n",
++                    PR_GetCurrentThread(),
++                    (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
++                    lock_count - 1);
++        } else {
++            slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
++                    "map_unlock: (%p)  is now %s : count=%d\n",
++                    PR_GetCurrentThread(),
++                    "MAP_RWLOCK_FREE",
++                    lock_count - 1);
+         }
++#endif
++    }
+ 
+ common:
+        return rc;
+-- 
+2.21.0
+
+
+From 5e6953c1d4e776f5e084ea69a4f6e6b485362b3d Mon Sep 17 00:00:00 2001
+From: Thierry Bordaz <tbordaz@redhat.com>
+Date: Wed, 10 Apr 2019 15:54:16 +0200
+Subject: [PATCH 08/13] Bug 1694263: improve debug msg to match pstack threadId
+
+Description:
+
+	A pstack is showing threadId that differs from the
+	the thread pointer. To match logs with pstack
+	better to display the threadId
+
+https://bugzilla.redhat.com/show_bug.cgi?id=1694263
+Signed-off-by: Thierry Bordaz <tbordaz@redhat.com>
+---
+ src/back-sch.c | 10 +++++-----
+ src/back-shr.c | 15 +++++++++++----
+ src/back-shr.h |  1 +
+ src/map.c      | 30 +++++++++++++++---------------
+ 4 files changed, 32 insertions(+), 24 deletions(-)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 2d0bad0..4cacb28 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -2346,14 +2346,14 @@ backend_be_pre_write_cb(Slapi_PBlock *pb) {
+         }
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                "backend_be_pre_write_cb: (%p) MAP_RWLOCK_FREE -> MAP_WLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++                "backend_be_pre_write_cb: (%p) MAP_RWLOCK_FREE -> MAP_WLOCK_HELD  : count=%d\n", (void *) PR_MyThreadId(), 1);
+ #endif
+     } else {
+         set_plugin_monitor_count(lock_count + 1);
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                         "backend_be_pre_write_cb: (%p)  %s --> MAP_WLOCK_HELD  : count=%d\n",
+-                PR_GetCurrentThread(),
++                (void *) PR_MyThreadId(),
+                 (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD": "MAP_RLOCK_HELD",
+                 lock_count + 1);
+ #endif
+@@ -2428,7 +2428,7 @@ backend_be_post_write_cb(Slapi_PBlock *pb)
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                 "backend_be_post_write_cb: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
+-                PR_GetCurrentThread(),
++                (void *) PR_MyThreadId(),
+                 (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+                 0);
+ #endif
+@@ -2439,13 +2439,13 @@ backend_be_post_write_cb(Slapi_PBlock *pb)
+         if (lock_count > 1) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                     "backend_be_post_write_cb: (%p)  keep %s : count=%d\n",
+-                    PR_GetCurrentThread(),
++                    (void *) PR_MyThreadId(),
+                     (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+                     lock_count - 1);
+         } else {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                     "backend_be_post_write_cb: (%p)  is now %s : count=%d\n",
+-                    PR_GetCurrentThread(),
++                    (void *) PR_MyThreadId(),
+                     "MAP_RWLOCK_FREE",
+                     lock_count - 1);
+         }
+diff --git a/src/back-shr.c b/src/back-shr.c
+index 920c135..2bfdf52 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -2868,6 +2868,13 @@ backend_shr_internal_postop_init(Slapi_PBlock *pb, struct plugin_state *state)
+ 	return 0;
+ }
+ 
++static int
++PR_MyThreadId(void)
++{
++    PRThread *thr = PR_GetCurrentThread();
++    PRUint32 myself = PR_GetThreadID(thr);
++    return myself;
++}
+ PRBool use_lock_status = PR_FALSE;
+ static unsigned int thread_plugin_lock_status;
+ PRBool use_lock_count = PR_FALSE;
+@@ -2953,7 +2960,7 @@ get_plugin_monitor_status(void)
+         ret = (int) MAP_RWLOCK_UNINIT;
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "get_plugin_monitor_status",
+-            "(%s) lock_status = %d (%p)\n", use_lock_status ? "TRUE" : "FALSE", ret, PR_GetCurrentThread());
++            "(%s) lock_status = %d (%p)\n", use_lock_status ? "TRUE" : "FALSE", ret, (void *) PR_MyThreadId());
+ #endif
+     return ret;
+ }
+@@ -2963,7 +2970,7 @@ set_plugin_monitor_status(int lock_status)
+ {
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "set_plugin_monitor_status",
+-            "(%s) lock_status = %d --> %d (%p)\n", use_lock_status ? "TRUE" : "FALSE", get_plugin_monitor_status(), (int) lock_status, PR_GetCurrentThread());
++            "(%s) lock_status = %d --> %d (%p)\n", use_lock_status ? "TRUE" : "FALSE", get_plugin_monitor_status(), (int) lock_status, (void *) PR_MyThreadId());
+ #endif
+ 
+     if (use_lock_status) {
+@@ -3010,7 +3017,7 @@ get_plugin_monitor_count(void)
+         ret = (int) MAP_RWLOCK_UNINIT;
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "get_plugin_monitor_count",
+-            "(%s) lock_count = %d (%p)\n", use_lock_count ? "TRUE" : "FALSE", ret, PR_GetCurrentThread());
++            "(%s) lock_count = %d (%p)\n", use_lock_count ? "TRUE" : "FALSE", ret, (void *) PR_MyThreadId());
+ #endif
+     return ret;
+ }
+@@ -3020,7 +3027,7 @@ set_plugin_monitor_count(int lock_count)
+ {
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "set_plugin_monitor_count",
+-            "(%s) lock_count = %d --> %d (%p)\n", use_lock_count ? "TRUE" : "FALSE", get_plugin_monitor_count(), (int) lock_count, PR_GetCurrentThread());
++            "(%s) lock_count = %d --> %d (%p)\n", use_lock_count ? "TRUE" : "FALSE", get_plugin_monitor_count(), (int) lock_count, (void *) PR_MyThreadId());
+ #endif
+     if (use_lock_count) {
+         int *lock_count_p;
+diff --git a/src/back-shr.h b/src/back-shr.h
+index 8c68b4f..5d72ad9 100644
+--- a/src/back-shr.h
++++ b/src/back-shr.h
+@@ -30,6 +30,7 @@
+ #define MAP_WLOCK_HELD    2
+ #define MAP_RLOCK_HELD    1
+ #define MAP_RWLOCK_FREE   0
++static int PR_MyThreadId(void);
+ int  rw_monitor_enabled(void);
+ int  get_plugin_monitor_status(void);
+ void set_plugin_monitor_status(int lock_status);
+diff --git a/src/map.c b/src/map.c
+index e953925..f80f465 100644
+--- a/src/map.c
++++ b/src/map.c
+@@ -1264,7 +1264,7 @@ map_rdlock(void)
+ 
+ #if DEBUG_MAP_LOCK
+ 	slapi_log_error(SLAPI_LOG_FATAL, "map_rdlock",
+-				"thread_id = %p (call level = %d)\n", PR_GetCurrentThread(), wrap_get_call_level());
++				"thread_id = %p (call level = %d)\n", (void *) PR_MyThreadId(), wrap_get_call_level());
+ #endif
+ 	if (lock_status == MAP_RWLOCK_UNINIT) {
+ 		/* This is not initialized used the old way */
+@@ -1284,7 +1284,7 @@ map_rdlock(void)
+ #if DEBUG_MAP_LOCK
+         if (lock_count != 0) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                    "map rdlock: (%p) ALERT !!!   count was %d -> 1\n", PR_GetCurrentThread(), lock_count);
++                    "map rdlock: (%p) ALERT !!!   count was %d -> 1\n", (void *) PR_MyThreadId(), lock_count);
+         }
+ #endif
+ 
+@@ -1292,12 +1292,12 @@ map_rdlock(void)
+         rc = plugin_rdlock();
+         if (rc) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                    "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
++                    "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", (void *) PR_MyThreadId(), rc);
+             return rc;
+         }
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++                "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD  : count=%d\n", (void *) PR_MyThreadId(), 1);
+ #endif
+         rc = wrap_rwlock_rdlock(map_data.lock);
+         if (rc) {
+@@ -1312,7 +1312,7 @@ map_rdlock(void)
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+             "map rdlock: (%p) was already hold %s : count=%d > %d!!!\n",
+-            PR_GetCurrentThread(),
++            (void *) PR_MyThreadId(),
+             (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : "MAP_RLOCK_HELD",
+             lock_count, lock_count + 1);
+ #endif
+@@ -1339,7 +1339,7 @@ map_wrlock(void)
+ 
+ #if DEBUG_MAP_LOCK
+ 	slapi_log_error(SLAPI_LOG_FATAL, "map wrlock",
+-				"thread_id = %p (call level = %d)\n", PR_GetCurrentThread(), wrap_get_call_level());
++				"thread_id = %p (call level = %d)\n", (void *) PR_MyThreadId(), wrap_get_call_level());
+ #endif
+ 	if (lock_status == MAP_RWLOCK_UNINIT) {
+ 		/* This is not initialized used the old way */
+@@ -1360,25 +1360,25 @@ map_wrlock(void)
+ #if DEBUG_MAP_LOCK
+         if (lock_count != 0) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                    "map wrlock: (%p) ALERT !!!   count was %d --> 1\n", PR_GetCurrentThread(), lock_count);
++                    "map wrlock: (%p) ALERT !!!   count was %d --> 1\n", (void *) PR_MyThreadId(), lock_count);
+         }
+ #endif
+         /* Acquire the slapi plugin in write */
+         rc = plugin_wrlock();
+         if (rc) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                    "map wrlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_GetCurrentThread(), rc);
++                    "map wrlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", (void *) PR_MyThreadId(), rc);
+             return rc;
+         }
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD  : count=%d\n", PR_GetCurrentThread(), 1);
++                "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD  : count=%d\n", (void *) PR_MyThreadId(), 1);
+ #endif
+ 
+         rc = wrap_rwlock_wrlock(map_data.lock);
+         if (rc) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                    "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD : fail to write lock map lock (%d)\n", PR_GetCurrentThread(), rc);
++                    "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD : fail to write lock map lock (%d)\n", (void *) PR_MyThreadId(), rc);
+             plugin_unlock();
+             goto common;
+         }
+@@ -1387,7 +1387,7 @@ map_wrlock(void)
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                 "map wrlock: (%p)  %s --> MAP_WLOCK_HELD  : count=%d\n",
+-                PR_GetCurrentThread(),
++                (void *) PR_MyThreadId(),
+                 (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : "MAP_RLOCK_HELD",
+                 lock_count + 1);
+ #endif
+@@ -1440,7 +1440,7 @@ map_unlock(void)
+ 
+ #if DEBUG_MAP_LOCK
+ 	slapi_log_error(SLAPI_LOG_FATAL, "map_unlock",
+-				"thread_id = %p (call level = %d)\n", PR_GetCurrentThread(), wrap_get_call_level());
++				"thread_id = %p (call level = %d)\n", (void *) PR_MyThreadId(), wrap_get_call_level());
+ #endif
+ 	if (lock_status == MAP_RWLOCK_UNINIT) {
+ 		/* This is not initialized used the old way */
+@@ -1461,7 +1461,7 @@ map_unlock(void)
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                 "map_unlock: (%p)  %s --> MAP_RWLOCK_FREE  : count=%d\n",
+-                PR_GetCurrentThread(),
++                (void *) PR_MyThreadId(),
+                 (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+                 0);
+ #endif
+@@ -1478,13 +1478,13 @@ map_unlock(void)
+         if (lock_count > 1) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                     "map_unlock: (%p)  keep %s : count=%d\n",
+-                    PR_GetCurrentThread(),
++                    (void *) PR_MyThreadId(),
+                     (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : (lock_status == MAP_RLOCK_HELD) ? "MAP_RLOCK_HELD" : "MAP_RWLOCK_FREE",
+                     lock_count - 1);
+         } else {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+                     "map_unlock: (%p)  is now %s : count=%d\n",
+-                    PR_GetCurrentThread(),
++                    (void *) PR_MyThreadId(),
+                     "MAP_RWLOCK_FREE",
+                     lock_count - 1);
+         }
+-- 
+2.21.0
+
+
+From 52fd1595699ea9859c2f4c41ae7ff425d65ae3cf Mon Sep 17 00:00:00 2001
+From: Thierry Bordaz <tbordaz@redhat.com>
+Date: Wed, 10 Apr 2019 18:40:02 +0200
+Subject: [PATCH 09/13] Bug 1694263: On some 'cn=config' updates bepost_op are
+ not called that leads to lock leak
+
+Description:
+	The true cause of the hang was that some updates on 'cn=config'
+	can skip the BEPOST phase. (in this bug it was the maxbersize setting).
+	The consequence is that the slapi-nis map lock was acquired but not released.
+	The fix consist to ignore (not lock slapi-nis map) write operation done
+	on 'cn=config' and 'cn=schema'
+
+https://bugzilla.redhat.com/show_bug.cgi?id=1694263
+Signed-off-by: Thierry Bordaz <tbordaz@redhat.com>
+---
+ src/back-sch.c | 48 +++++++++++++++++++++++++++++++++++++++++++++---
+ src/back-shr.c | 22 ++++++++++++++++++++--
+ src/back-shr.h |  3 ++-
+ src/plug-sch.c |  7 +++++++
+ 4 files changed, 74 insertions(+), 6 deletions(-)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 4cacb28..9201c2e 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -2303,6 +2303,33 @@ backend_betxn_pre_write_cb(Slapi_PBlock *pb)
+ 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
+ 	return state->use_be_txns ? backend_write_cb(pb, state) : 0;
+ }
++static PRBool
++backend_be_write_ignore(Slapi_PBlock *pb)
++{
++    char *dn = NULL;
++    Slapi_DN *target_sdn = NULL;
++    int check;
++    int i = 0;
++    PRBool ignore = PR_FALSE;
++
++    /* Check if the target DN is a subordinates of
++     * on of the ignored containers
++     */
++    slapi_pblock_get(pb, SLAPI_ORIGINAL_TARGET, &dn);
++    target_sdn = slapi_sdn_new_dn_byval(dn);
++
++    for (i = 0; ignored_containers_sdn[i]; i++) {
++        check  = slapi_sdn_issuffix(target_sdn, ignored_containers_sdn[i]);
++        if (check != 0) {
++            /* This entry is an ignored container */
++            ignore = PR_TRUE;
++            break;
++        }
++    }
++    slapi_sdn_free(&target_sdn);
++    return ignore;
++}
++
+ 
+ static int
+ backend_be_pre_write_cb(Slapi_PBlock *pb) {
+@@ -2323,6 +2350,14 @@ backend_be_pre_write_cb(Slapi_PBlock *pb) {
+     if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
+         return 0;
+     }
++    if (backend_be_write_ignore(pb)) {
++#if DEBUG_MAP_LOCK
++        slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                "backend_be_pre_write_cb: (%p) operation is not impacting schema compat\n", PR_MyThreadId(), 1);
++#endif
++        return 0;
++    }
++
+ 
+ 
+     wrap_inc_call_level();
+@@ -2404,9 +2439,16 @@ backend_be_post_write_cb(Slapi_PBlock *pb)
+ 		/* No data to serve yet */
+ 		return 0;
+ 	}
+-        if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
+-            return 0;
+-        }
++    if (rw_monitor_enabled() == MAP_MONITOR_DISABLED) {
++        return 0;
++    }
++    if (backend_be_write_ignore(pb)) {
++#if DEBUG_MAP_LOCK
++        slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
++                "backend_be_post_write_cb: (%p) operation was not impacting schema compat\n", PR_MyThreadId(), 1);
++#endif
++        return 0;
++    }
+ 
+ 	wrap_inc_call_level();
+ 
+diff --git a/src/back-shr.c b/src/back-shr.c
+index 2bfdf52..b348869 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -2868,7 +2868,7 @@ backend_shr_internal_postop_init(Slapi_PBlock *pb, struct plugin_state *state)
+ 	return 0;
+ }
+ 
+-static int
++int
+ PR_MyThreadId(void)
+ {
+     PRThread *thr = PR_GetCurrentThread();
+@@ -2902,14 +2902,32 @@ lock_count_free(void *ptr)
+     }
+ }
+ 
++/* This is used to ignore some write operations
++ * if they target subordinates entry of ignored containers
++ */
++Slapi_DN **ignored_containers_sdn = NULL;
+ void
+ init_map_lock(void)
+ {
+ #if DEBUG_MAP_LOCK
+     /* The plugin lock is initialized as free */
+     slapi_log_error(SLAPI_LOG_FATAL, "init_plugin_lock",
+-            "thread_id = %p\n", PR_GetCurrentThread());
++            "thread_id = %p\n", PR_MyThreadId());
+ #endif
++    if (ignored_containers_sdn == NULL) {
++        /* allocates ignored_containers_sdn of Slapi_DN* only once
++         * It will be used later in be_pre/post_write_cb
++         */
++        int cnt;
++        char *ignored_containers[3] = { "cn=config", "cn=schema", NULL};
++
++        for (cnt = 0; ignored_containers[cnt]; cnt++);
++        ignored_containers_sdn = (Slapi_DN **) slapi_ch_calloc(cnt + 1, sizeof(Slapi_DN *));
++
++        for (cnt = 0; ignored_containers[cnt]; cnt++) {
++            ignored_containers_sdn[cnt] = slapi_sdn_new_dn_byval(ignored_containers[cnt]);
++        }
++    }
+ 
+     if (PR_NewThreadPrivateIndex(&thread_plugin_lock_status, lock_status_free) == PR_SUCCESS) {
+         use_lock_status = PR_TRUE;
+diff --git a/src/back-shr.h b/src/back-shr.h
+index 5d72ad9..d01b999 100644
+--- a/src/back-shr.h
++++ b/src/back-shr.h
+@@ -30,13 +30,14 @@
+ #define MAP_WLOCK_HELD    2
+ #define MAP_RLOCK_HELD    1
+ #define MAP_RWLOCK_FREE   0
+-static int PR_MyThreadId(void);
++int PR_MyThreadId(void);
+ int  rw_monitor_enabled(void);
+ int  get_plugin_monitor_status(void);
+ void set_plugin_monitor_status(int lock_status);
+ int  get_plugin_monitor_count(void);
+ void set_plugin_monitor_count(int lock_count);
+ void init_map_lock(void);
++Slapi_DN **ignored_containers_sdn;
+ 
+ 
+ struct plugin_state;
+diff --git a/src/plug-sch.c b/src/plug-sch.c
+index 2d9c75b..913abe2 100644
+--- a/src/plug-sch.c
++++ b/src/plug-sch.c
+@@ -197,6 +197,13 @@ plugin_shutdown(Slapi_PBlock *pb)
+ 	if (state->plugin_base != NULL) {
+ 		slapi_ch_free((void **)&state->plugin_base);
+ 	}
++	if (ignored_containers_sdn) {
++		int i;
++		for (i = 0; ignored_containers_sdn[i]; i++) {
++			slapi_sdn_free(&ignored_containers_sdn[i]);
++		}
++		slapi_ch_free((void **)&ignored_containers_sdn);
++	}
+ 	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+ 			"plugin shutdown completed\n");
+ 	return 0;
+-- 
+2.21.0
+
+
+From c44f9ca81afa6cbf817159d37b0695d6462866eb Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 23 Apr 2019 09:39:08 +0300
+Subject: [PATCH 10/13] Cast callbacks passed to xdrrec_create to a right type
+
+With newer compilers there are stricter checks on callback type
+validation. As result, we need to cast the callback signatures even
+though it makes no practical difference in our test case.
+---
+ tests/clients/yp.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/tests/clients/yp.c b/tests/clients/yp.c
+index 200d591..bc2da1f 100644
+--- a/tests/clients/yp.c
++++ b/tests/clients/yp.c
+@@ -34,6 +34,8 @@
+ #include <rpc/rpc.h>
+ #include "../../yp/yp.h"
+ 
++typedef int (*xdrrec_proc_t)(void *, void *, int);
++
+ static struct sockaddr_in server;
+ static int connected;
+ 
+@@ -189,7 +191,7 @@ all(CLIENT *client, FILE *output, int argc, char **argv)
+ 	}
+ 
+ 	memset(&s, 0, sizeof(s));
+-	xdrrec_create(&s, 0, 0, (char *) &sock, &readjunk, &writejunk);
++	xdrrec_create(&s, 0, 0, (char *) &sock, (xdrrec_proc_t) &readjunk, (xdrrec_proc_t) &writejunk);
+ 	s.x_op = XDR_ENCODE;
+ 
+ 	memset(&req, 0, sizeof(req));
+@@ -218,7 +220,7 @@ all(CLIENT *client, FILE *output, int argc, char **argv)
+ 	xdr_destroy(&s);
+ 
+ 	memset(&s, 0, sizeof(s));
+-	xdrrec_create(&s, 0, 0, (char *) &sock, &readjunk, &writejunk);
++	xdrrec_create(&s, 0, 0, (char *) &sock, (xdrrec_proc_t) &readjunk, (xdrrec_proc_t) &writejunk);
+ 	s.x_op = XDR_DECODE;
+ 	xdrrec_skiprecord(&s);
+ 
+-- 
+2.21.0
+
+
+From a4f645e09d92a8b8f7a80f939091689075d53de1 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 23 Apr 2019 09:40:59 +0300
+Subject: [PATCH 11/13] Define send_ldap_result as an external function
+ prototype
+
+389-ds does not expose send_ldap_result() as a public API. However,
+we depend on it because slapi_send_ldap_result() is not usable for
+the specific use case of the schema compatibility plugin.
+---
+ src/back-sch.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 9201c2e..f6211bc 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -55,6 +55,12 @@
+ #include "map.h"
+ #include "back-sch.h"
+ 
++/*
++ * This is not a public function in 389-ds but we need to use it in backend_search_cb(),
++ * see a comment there on the difference between slapi_send_ldap_result() and send_ldap_result().
++ */
++extern void send_ldap_result(Slapi_PBlock *pb, int err, char *matched, char *text, int nentries, struct berval **urls);
++
+ static int backend_passwdmod_extop(Slapi_PBlock *pb);
+ backend_extop_handlers_t extop_handlers[] = {{EXTOP_PASSWD_OID, (IFP) backend_passwdmod_extop},
+ 					    {NULL, NULL}};
+-- 
+2.21.0
+
+
+From dc3c95cf5b5a2c2d5e7f81ed02f2d9bf3c9acb9f Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 23 Apr 2019 09:42:41 +0300
+Subject: [PATCH 12/13] Declare transaction-aware callbacks for schema compat
+ plugin
+
+Schema compatibility plugin provides two transaction-aware
+callbacks. The functions need to be declared as they are defined and
+used in different compilation units.
+---
+ src/backend.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/backend.h b/src/backend.h
+index f0a5bbb..4034704 100644
+--- a/src/backend.h
++++ b/src/backend.h
+@@ -68,6 +68,11 @@ int backend_init_postop(struct slapi_pblock *pb, struct plugin_state *state);
+ int backend_init_internal_postop(struct slapi_pblock *pb,
+ 				 struct plugin_state *state);
+ 
++/* Only used for schema compatibility plugin*/
++int backend_init_be_preop(Slapi_PBlock *pb, struct plugin_state *state);
++int backend_init_be_postop(Slapi_PBlock *pb, struct plugin_state *state);
++
++
+ /* Read the server's name. */
+ int backend_read_master_name(struct plugin_state *state,
+ 			     struct slapi_pblock *pb,
+-- 
+2.21.0
+
+
+From 1d9e79557df660f4556edb59bedead00eda9b757 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 23 Apr 2019 09:44:48 +0300
+Subject: [PATCH 13/13] Use portable definitions for printing PRUint32 values
+
+Also include proper headers for NSPR thread-local variable handling.
+Fixes covscan warnings.
+---
+ src/back-shr.c |  4 +++-
+ src/map.c      | 28 ++++++++++++++++------------
+ 2 files changed, 19 insertions(+), 13 deletions(-)
+
+diff --git a/src/back-shr.c b/src/back-shr.c
+index b348869..472846a 100644
+--- a/src/back-shr.c
++++ b/src/back-shr.c
+@@ -37,7 +37,9 @@
+ #endif
+ 
+ #include <rpc/xdr.h>
+-#include <nspr4/prtypes.h>
++#include <prtypes.h>
++/* NSPR private API for thread-local variables */
++#include <private/prpriv.h>
+ #include "../yp/yp.h"
+ 
+ #ifdef HAVE_TCPD_H
+diff --git a/src/map.c b/src/map.c
+index f80f465..3be60b4 100644
+--- a/src/map.c
++++ b/src/map.c
+@@ -23,6 +23,7 @@
+ #include "config.h"
+ #endif
+ 
++#include <inttypes.h>
+ #include <sys/types.h>
+ #include <search.h>
+ #include <stdlib.h>
+@@ -40,6 +41,9 @@
+ 
+ #include <rpc/rpc.h>
+ 
++/* NSPR private API for thread-local variables */
++#include <private/prpriv.h>
++
+ #include "backend.h"
+ #include "disp-nis.h"
+ #include "map.h"
+@@ -1264,7 +1268,7 @@ map_rdlock(void)
+ 
+ #if DEBUG_MAP_LOCK
+ 	slapi_log_error(SLAPI_LOG_FATAL, "map_rdlock",
+-				"thread_id = %p (call level = %d)\n", (void *) PR_MyThreadId(), wrap_get_call_level());
++				"thread_id = %"PRIx32" (call level = %d)\n", PR_MyThreadId(), wrap_get_call_level());
+ #endif
+ 	if (lock_status == MAP_RWLOCK_UNINIT) {
+ 		/* This is not initialized used the old way */
+@@ -1284,7 +1288,7 @@ map_rdlock(void)
+ #if DEBUG_MAP_LOCK
+         if (lock_count != 0) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                    "map rdlock: (%p) ALERT !!!   count was %d -> 1\n", (void *) PR_MyThreadId(), lock_count);
++                    "map rdlock: (%"PRIx32") ALERT !!!   count was %d -> 1\n", PR_MyThreadId(), lock_count);
+         }
+ #endif
+ 
+@@ -1292,12 +1296,12 @@ map_rdlock(void)
+         rc = plugin_rdlock();
+         if (rc) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                    "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", (void *) PR_MyThreadId(), rc);
++                    "map rdlock: (%"PRIx32") MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_MyThreadId(), rc);
+             return rc;
+         }
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                "map rdlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD  : count=%d\n", (void *) PR_MyThreadId(), 1);
++                "map rdlock: (%"PRIx32") MAP_RWLOCK_FREE -> MAP_RLOCK_HELD  : count=%d\n", PR_MyThreadId(), 1);
+ #endif
+         rc = wrap_rwlock_rdlock(map_data.lock);
+         if (rc) {
+@@ -1311,8 +1315,8 @@ map_rdlock(void)
+ 
+ #if DEBUG_MAP_LOCK
+     slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-            "map rdlock: (%p) was already hold %s : count=%d > %d!!!\n",
+-            (void *) PR_MyThreadId(),
++            "map rdlock: (%x"PRIx32") was already hold %s : count=%d > %d!!!\n",
++            PR_MyThreadId(),
+             (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : "MAP_RLOCK_HELD",
+             lock_count, lock_count + 1);
+ #endif
+@@ -1360,25 +1364,25 @@ map_wrlock(void)
+ #if DEBUG_MAP_LOCK
+         if (lock_count != 0) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                    "map wrlock: (%p) ALERT !!!   count was %d --> 1\n", (void *) PR_MyThreadId(), lock_count);
++                    "map wrlock: (%"PRIx32") ALERT !!!   count was %d --> 1\n", PR_MyThreadId(), lock_count);
+         }
+ #endif
+         /* Acquire the slapi plugin in write */
+         rc = plugin_wrlock();
+         if (rc) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schemacompat",
+-                    "map wrlock: (%p) MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", (void *) PR_MyThreadId(), rc);
++                    "map wrlock: (%"PRIx32") MAP_RWLOCK_FREE -> MAP_RLOCK_HELD: fail to read lock plugin lock (%d)\n", PR_MyThreadId(), rc);
+             return rc;
+         }
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD  : count=%d\n", (void *) PR_MyThreadId(), 1);
++                "map wrlock: (%"PRIx32") MAP_RWLOCK_FREE --> MAP_WLOCK_HELD  : count=%d\n", PR_MyThreadId(), 1);
+ #endif
+ 
+         rc = wrap_rwlock_wrlock(map_data.lock);
+         if (rc) {
+             slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                    "map wrlock: (%p) MAP_RWLOCK_FREE --> MAP_WLOCK_HELD : fail to write lock map lock (%d)\n", (void *) PR_MyThreadId(), rc);
++                    "map wrlock: (%"PRIx32") MAP_RWLOCK_FREE --> MAP_WLOCK_HELD : fail to write lock map lock (%d)\n", PR_MyThreadId(), rc);
+             plugin_unlock();
+             goto common;
+         }
+@@ -1386,8 +1390,8 @@ map_wrlock(void)
+         set_plugin_monitor_count(lock_count + 1);
+ #if DEBUG_MAP_LOCK
+         slapi_log_error(SLAPI_LOG_FATAL, "schema-compat",
+-                "map wrlock: (%p)  %s --> MAP_WLOCK_HELD  : count=%d\n",
+-                (void *) PR_MyThreadId(),
++                "map wrlock: (%"PRIx32")  %s --> MAP_WLOCK_HELD  : count=%d\n",
++                PR_MyThreadId(),
+                 (lock_status == MAP_WLOCK_HELD) ? "MAP_WLOCK_HELD" : "MAP_RLOCK_HELD",
+                 lock_count + 1);
+ #endif
+-- 
+2.21.0
+

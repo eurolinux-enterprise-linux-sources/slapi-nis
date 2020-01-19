@@ -16,6 +16,13 @@ look like this:
   nsslapd-version: 0.0
   nsslapd-pluginvendor: redhat.com
   nsslapd-plugindescription: Schema Compatibility Plugin
+  slapi-entry-cache: 1
+
+The only optional attribute is 'slapi-entry-cache' (default to 1)
+controls whether the plugin should use an entry cache for outstanding
+query requests. The entry cache is an optimization technique to
+help reduce memory pressure during parallel requests. Specify 0 to disable
+an entry cache.
 
 Configuration for individual sets should be stored in entries directly
 beneath the plugin's entry.  These attributes are recognized:
@@ -32,7 +39,9 @@ beneath the plugin's entry.  These attributes are recognized:
    found.
  * schema-compat-search-filter (required)
    A filter used to select which candidate entries should have new
-   entries created for them in this container.
+   entries created for them in this container.  Attributes mentioned
+   in the filter should be indexed and defined with a proper syntax and
+   equality test in the directory server schema.
  * schema-compat-entry-rdn (required)
    The RDN to give to generated entries, which will be stored as
    children of this container.

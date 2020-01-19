@@ -1,0 +1,905 @@
+From 1229089c4023757ae15ff1866e4d89069325d2f0 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Thu, 7 Dec 2017 12:33:24 +0200
+Subject: [PATCH] Synchronize nsswitch backend code with freeIPA
+
+FreeIPA ipa-extdom-extop plugin uses the same logic as slapi-nis
+schema-compat plugin to handle requests to SSSD. Thus, we keep the
+code synchronized across both code bases. Since both plugins are loaded
+into the same address space we currently rename functions to allow them
+to co-exist. In future we'd move some of common code to a shared
+library.
+---
+ src/back-sch-nss_sss.c   | 365 ++++++++++++++++++++++++-----------------------
+ src/back-sch-sss_idmap.c | 335 +++++++++++++++++++++++--------------------
+ src/back-sch.h           |   8 +-
+ src/plug-sch.c           |  32 +++--
+ 4 files changed, 390 insertions(+), 350 deletions(-)
+
+diff --git a/src/back-sch-nss_sss.c b/src/back-sch-nss_sss.c
+index 2b1b8b0..5ee911e 100644
+--- a/src/back-sch-nss_sss.c
++++ b/src/back-sch-nss_sss.c
+@@ -32,232 +32,245 @@
+ #include <errno.h>
+ #include <pwd.h>
+ #include <grp.h>
++#include <sys/param.h>
+ #include "back-sch-nss.h"
+ 
+ struct nss_ops_ctx {
+-	void *dl_handle;
+-	long int initgroups_start;
+-
+-	enum nss_status (*getpwnam_r)(const char *name, struct passwd *result,
+-			  char *buffer, size_t buflen, int *errnop);
+-	enum nss_status (*getpwuid_r)(uid_t uid, struct passwd *result,
+-			  char *buffer, size_t buflen, int *errnop);
+-	enum nss_status (*getgrnam_r)(const char *name, struct group *result,
+-			  char *buffer, size_t buflen, int *errnop);
+-	enum nss_status (*getgrgid_r)(gid_t gid, struct group *result,
+-			  char *buffer, size_t buflen, int *errnop);
+-	enum nss_status (*initgroups_dyn)(const char *user, gid_t group,
+-			      long int *start, long int *size,
+-			      gid_t **groups, long int limit,
+-			      int *errnop);
++    void *dl_handle;
++    long int initgroups_start;
++
++    enum nss_status (*getpwnam_r)(const char *name, struct passwd *result,
++                                  char *buffer, size_t buflen, int *errnop);
++    enum nss_status (*getpwuid_r)(uid_t uid, struct passwd *result,
++                                  char *buffer, size_t buflen, int *errnop);
++    enum nss_status (*getgrnam_r)(const char *name, struct group *result,
++                                  char *buffer, size_t buflen, int *errnop);
++    enum nss_status (*getgrgid_r)(gid_t gid, struct group *result,
++                                  char *buffer, size_t buflen, int *errnop);
++    enum nss_status (*initgroups_dyn)(const char *user, gid_t group,
++                                      long int *start, long int *size,
++                                      gid_t **groups, long int limit,
++                                      int *errnop);
+ };
+ 
+ void backend_nss_free_context(struct nss_ops_ctx **nss_context)
+ {
+-	if (nss_context == NULL) {
+-		return;
+-	}
++    if ((nss_context == NULL) || (*nss_context == NULL)) {
++        return;
++    }
+ 
+-	if ((*nss_context)->dl_handle != NULL) {
+-		dlclose((*nss_context)->dl_handle);
+-	}
++    if ((*nss_context)->dl_handle != NULL) {
++        dlclose((*nss_context)->dl_handle);
++    }
+ 
+-	free((*nss_context));
+-	*nss_context = NULL;
++    free((*nss_context));
++    *nss_context = NULL;
+ }
+ 
+-void backend_nss_init_context(struct nss_ops_ctx **nss_context)
++int backend_nss_init_context(struct nss_ops_ctx **nss_context)
+ {
+-	struct nss_ops_ctx *ctx = NULL;
+-
+-	if (nss_context == NULL) {
+-		return;
+-	}
+-
+-	ctx = calloc(1, sizeof(struct nss_ops_ctx));
+-
+-	*nss_context = ctx;
+-	if (ctx == NULL) {
+-		return;
+-	}
+-
+-	ctx->dl_handle = dlopen("libnss_sss.so.2", RTLD_NOW);
+-	if (ctx->dl_handle == NULL) {
+-		goto fail;
+-	}
+-
+-	ctx->getpwnam_r = dlsym(ctx->dl_handle, "_nss_sss_getpwnam_r");
+-	if (ctx->getpwnam_r == NULL) {
+-		goto fail;
+-	}
+-
+-	ctx->getpwuid_r = dlsym(ctx->dl_handle, "_nss_sss_getpwuid_r");
+-	if (ctx->getpwuid_r == NULL) {
+-		goto fail;
+-	}
+-
+-	ctx->getgrnam_r = dlsym(ctx->dl_handle, "_nss_sss_getgrnam_r");
+-	if (ctx->getgrnam_r == NULL) {
+-		goto fail;
+-	}
+-
+-	ctx->getgrgid_r = dlsym(ctx->dl_handle, "_nss_sss_getgrgid_r");
+-	if (ctx->getgrgid_r == NULL) {
+-		goto fail;
+-	}
+-
+-	ctx->initgroups_dyn = dlsym(ctx->dl_handle, "_nss_sss_initgroups_dyn");
+-	if (ctx->initgroups_dyn == NULL) {
+-		goto fail;
+-	}
+-
+-	return;
++    struct nss_ops_ctx *ctx = NULL;
++
++    if (nss_context == NULL) {
++        return EINVAL;
++    }
++
++    ctx = calloc(1, sizeof(struct nss_ops_ctx));
++    if (ctx == NULL) {
++        return ENOMEM;
++    }
++    *nss_context = ctx;
++
++    ctx->dl_handle = dlopen("libnss_sss.so.2", RTLD_NOW);
++    if (ctx->dl_handle == NULL) {
++        goto fail;
++    }
++
++    ctx->getpwnam_r = dlsym(ctx->dl_handle, "_nss_sss_getpwnam_r");
++    if (ctx->getpwnam_r == NULL) {
++        goto fail;
++    }
++
++    ctx->getpwuid_r = dlsym(ctx->dl_handle, "_nss_sss_getpwuid_r");
++    if (ctx->getpwuid_r == NULL) {
++        goto fail;
++    }
++
++    ctx->getgrnam_r = dlsym(ctx->dl_handle, "_nss_sss_getgrnam_r");
++    if (ctx->getgrnam_r == NULL) {
++        goto fail;
++    }
++
++    ctx->getgrgid_r = dlsym(ctx->dl_handle, "_nss_sss_getgrgid_r");
++    if (ctx->getgrgid_r == NULL) {
++        goto fail;
++    }
++
++    ctx->initgroups_dyn = dlsym(ctx->dl_handle, "_nss_sss_initgroups_dyn");
++    if (ctx->initgroups_dyn == NULL) {
++        goto fail;
++    }
++
++    return 0;
+ 
+ fail:
+-	backend_nss_free_context(nss_context);
++    backend_nss_free_context(nss_context);
+ 
+-	return;
++    return EINVAL;
+ }
+ 
+ 
+ /* Following three functions cannot be implemented with nss_sss.so.2
+  * As result, we simply do nothing here */
+ 
+-void backend_nss_set_timeout(struct nss_ops_ctx **nss_context,
+-			     unsigned int timeout) {
+-	/* no operation */
++void backend_nss_set_timeout(struct nss_ops_ctx *nss_context,
++                             unsigned int timeout) {
++        /* no operation */
+ }
+ 
+-void backend_nss_evict_user(struct nss_ops_ctx **nss_context,
+-			    const char *name) {
+-	/* no operation */
++void backend_nss_evict_user(struct nss_ops_ctx *nss_context,
++                            const char *name) {
++        /* no operation */
+ }
+ 
+-void backend_nss_evict_group(struct nss_ops_ctx **nss_context,
+-			     const char *name) {
+-	/* no operation */
++void backend_nss_evict_group(struct nss_ops_ctx *nss_context,
++                             const char *name) {
++        /* no operation */
+ }
+ 
+ enum nss_status backend_nss_getpwnam(struct nss_ops_ctx *nss_context,
+-				     const char *name, struct passwd *pwd,
+-				     char *buffer, size_t buflen,
+-				     struct passwd **result,
+-				     int *lerrno) {
+-	enum nss_status ret;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = (enum nss_status)
+-		nss_context->getpwnam_r(name, pwd,
+-					buffer, buflen,
+-					lerrno);
+-
+-	if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
+-		*result = pwd;
+-	}
+-
+-	return ret;
++                                     const char *name, struct passwd *pwd,
++                                     char *buffer, size_t buflen,
++                                     struct passwd **result,
++                                     int *lerrno) {
++    enum nss_status ret;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = nss_context->getpwnam_r(name, pwd,
++                                  buffer, buflen,
++                                  lerrno);
++
++    if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
++        *result = pwd;
++        *lerrno = 0;
++    }
++
++    return ret;
+ }
+ 
+ enum nss_status backend_nss_getpwuid(struct nss_ops_ctx *nss_context,
+-				     uid_t uid, struct passwd *pwd,
+-				     char *buffer, size_t buflen,
+-				     struct passwd **result,
+-				     int *lerrno) {
+-	enum nss_status ret;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = (enum nss_status)
+-		nss_context->getpwuid_r(uid, pwd,
+-					buffer, buflen,
+-					lerrno);
+-
+-	if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
+-		*result = pwd;
+-	}
+-
+-	return ret;
++                                     uid_t uid, struct passwd *pwd,
++                                     char *buffer, size_t buflen,
++                                     struct passwd **result,
++                                     int *lerrno) {
++    enum nss_status ret;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = nss_context->getpwuid_r(uid, pwd,
++                                  buffer, buflen,
++                                  lerrno);
++
++    if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
++        *result = pwd;
++        *lerrno = 0;
++    }
++
++    return ret;
+ }
+ 
+ enum nss_status backend_nss_getgrnam(struct nss_ops_ctx *nss_context,
+-				     const char *name, struct group *grp,
+-				     char *buffer, size_t buflen,
+-				     struct group **result,
+-				     int *lerrno) {
+-	enum nss_status ret;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = (enum nss_status)
+-		nss_context->getgrnam_r(name, grp,
+-					buffer, buflen,
+-					lerrno);
+-
+-	if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
+-		*result = grp;
+-	}
+-
+-	return ret;
++                                     const char *name, struct group *grp,
++                                     char *buffer, size_t buflen,
++                                     struct group **result,
++                                     int *lerrno) {
++    enum nss_status ret;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = nss_context->getgrnam_r(name, grp,
++                                  buffer, buflen,
++                                  lerrno);
++
++    if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
++        *result = grp;
++        *lerrno = 0;
++    }
++
++    return ret;
+ }
+ 
+ enum nss_status backend_nss_getgrgid(struct nss_ops_ctx *nss_context,
+-				     gid_t gid, struct group *grp,
+-				     char *buffer, size_t buflen,
+-				     struct group **result,
+-				     int *lerrno) {
++                                     gid_t gid, struct group *grp,
++                                     char *buffer, size_t buflen,
++                                     struct group **result,
++                                     int *lerrno) {
+ 
+-	enum nss_status ret;
++    enum nss_status ret;
+ 
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
+ 
+-	ret = (enum nss_status)
+-		nss_context->getgrgid_r(gid, grp,
+-					buffer, buflen,
+-					lerrno);
++    ret = nss_context->getgrgid_r(gid, grp,
++                                  buffer, buflen,
++                                  lerrno);
+ 
+-	if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
+-		*result = grp;
+-	}
++    if ((ret == NSS_STATUS_SUCCESS) && (result != NULL)) {
++        *result = grp;
++        *lerrno = 0;
++    }
+ 
+-	return ret;
++    return ret;
+ }
+ 
+ enum nss_status backend_nss_getgrouplist(struct nss_ops_ctx *nss_context,
+-					 const char *name, gid_t group,
+-					 gid_t *groups, int *ngroups,
+-					 int *lerrno) {
++                                         const char *name, gid_t group,
++                                         gid_t *groups, int *ngroups,
++                                         int *lerrno) {
++
++    enum nss_status ret = NSS_STATUS_UNAVAIL;
++    long int tsize = MAX (1, *ngroups);
++    gid_t *newgroups = NULL;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    newgroups = (gid_t *) calloc (tsize, sizeof (gid_t));
++    if (newgroups == NULL) {
++        *lerrno = ENOMEM;
++        return NSS_STATUS_TRYAGAIN;
++    }
++
++    newgroups[0] = group;
++    nss_context->initgroups_start = 1;
+ 
+-	enum nss_status ret = NSS_STATUS_UNAVAIL;
+-	long int size = 0;
++    ret = nss_context->initgroups_dyn(name, group,
++                                      &nss_context->initgroups_start,
++                                      &tsize, &newgroups,
++                                      -1, lerrno);
+ 
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
++    (void) memcpy(groups, newgroups,
++                  MIN(*ngroups, nss_context->initgroups_start) * sizeof(gid_t));
++    free(newgroups);
+ 
+-	if (nss_context->initgroups_start == 0) {
+-		groups[0] = group;
+-		nss_context->initgroups_start++;
+-	}
++    if (*ngroups < nss_context->initgroups_start) {
++        ret = NSS_STATUS_TRYAGAIN;
++        *lerrno = ERANGE;
++    }
+ 
+-	ret = nss_context->initgroups_dyn(name, group,
+-					  &nss_context->initgroups_start,
+-					  &size, &groups,
+-					  -1, lerrno);
+-	if (ret == NSS_STATUS_SUCCESS) {
+-		nss_context->initgroups_start = 0;
+-	}
++    *ngroups = (int) nss_context->initgroups_start;
+ 
+-	*ngroups = (int) size;
++    nss_context->initgroups_start = 0;
+ 
+-	return ret;
++    return ret;
+ }
+ 
+diff --git a/src/back-sch-sss_idmap.c b/src/back-sch-sss_idmap.c
+index 6a31267..452ff4f 100644
+--- a/src/back-sch-sss_idmap.c
++++ b/src/back-sch-sss_idmap.c
+@@ -38,202 +38,223 @@
+ #include <sss_nss_idmap.h>
+ 
+ struct nss_ops_ctx {
+-	unsigned int timeout;
++    unsigned int timeout;
+ };
+ 
+ static enum nss_status __convert_sss_nss2nss_status(int errcode) {
+-	enum nss_status ret = NSS_STATUS_UNAVAIL;
+-
+-	if (errcode == 0) {
+-		ret = NSS_STATUS_SUCCESS;
+-	} else if (errcode == ENOENT) {
+-		ret = NSS_STATUS_NOTFOUND;
+-	} else if(errcode == ERANGE) {
+-		ret = NSS_STATUS_TRYAGAIN;
+-	} else if(errcode == ETIMEDOUT) {
+-		ret = NSS_STATUS_UNAVAIL;
+-	} else if(errcode == ETIME) {
+-		ret = NSS_STATUS_TRYAGAIN;
+-	};
+-
+-	return ret;
++    switch(errcode) {
++    case 0:
++        return NSS_STATUS_SUCCESS;
++    case ENOENT:
++        return NSS_STATUS_NOTFOUND;
++    case ETIME:
++        /* fall-through */
++    case ERANGE:
++        return NSS_STATUS_TRYAGAIN;
++    case ETIMEDOUT:
++        /* fall-through */
++    default:
++        return NSS_STATUS_UNAVAIL;
++    }
++    return NSS_STATUS_UNAVAIL;
+ }
+ 
+-void backend_nss_init_context(struct nss_ops_ctx **nss_context)
++int backend_nss_init_context(struct nss_ops_ctx **nss_context)
+ {
+-	struct nss_ops_ctx *ctx = NULL;
++    struct nss_ops_ctx *ctx = NULL;
+ 
+-	if (nss_context == NULL) {
+-		return;
+-	}
++    if (nss_context == NULL) {
++        return EINVAL;
++    }
+ 
+-	ctx = calloc(1, sizeof(struct nss_ops_ctx));
++    ctx = calloc(1, sizeof(struct nss_ops_ctx));
+ 
+-	*nss_context = ctx;
++    if (ctx == NULL) {
++        return ENOMEM;
++    }
++    *nss_context = ctx;
++    return 0;
+ }
+ 
+ void backend_nss_free_context(struct nss_ops_ctx **nss_context)
+ {
+-	if (nss_context == NULL) {
+-		return;
+-	}
++    if ((nss_context == NULL) || (*nss_context == NULL)) {
++        return;
++    }
+ 
+-	free((*nss_context));
+-	*nss_context = NULL;
++    free((*nss_context));
++    *nss_context = NULL;
+ }
+ 
+ 
+ void backend_nss_set_timeout(struct nss_ops_ctx *nss_context,
+-			     unsigned int timeout) {
+-	if (nss_context == NULL) {
+-		return;
+-	}
++                             unsigned int timeout) {
++    if (nss_context == NULL) {
++        return;
++    }
+ 
+-	nss_context->timeout = timeout;
++    nss_context->timeout = timeout;
+ }
+ 
+-/* TODO: handle buffers and memory allocation in this function */
+ void backend_nss_evict_user(struct nss_ops_ctx *nss_context,
+-			    const char *name) {
+-	if (nss_context == NULL) {
+-		return;
+-	}
+-
+-	(void) sss_nss_getpwnam_timeout(name, NULL,
+-					NULL, 0,
+-					NULL,
+-					SSS_NSS_EX_FLAG_INVALIDATE_CACHE,
+-					nss_context->timeout);
++                            const char *name) {
++    if (nss_context == NULL) {
++        return;
++    }
++
++    (void) sss_nss_getpwnam_timeout(name, NULL,
++                                    NULL, 0,
++                                    NULL,
++                                    SSS_NSS_EX_FLAG_INVALIDATE_CACHE,
++                                    nss_context->timeout);
+ }
+ 
+-/* TODO: handle buffers and memory allocation in this function */
+ void backend_nss_evict_group(struct nss_ops_ctx *nss_context,
+-			     const char *name) {
+-	if (nss_context == NULL) {
+-		return;
+-	}
+-
+-	(void) sss_nss_getgrnam_timeout(name, NULL,
+-					NULL, 0,
+-					NULL,
+-					SSS_NSS_EX_FLAG_INVALIDATE_CACHE,
+-					nss_context->timeout);
++                             const char *name) {
++    if (nss_context == NULL) {
++            return;
++    }
++
++    (void) sss_nss_getgrnam_timeout(name, NULL,
++                                    NULL, 0,
++                                    NULL,
++                                    SSS_NSS_EX_FLAG_INVALIDATE_CACHE,
++                                    nss_context->timeout);
+ }
+ 
+ enum nss_status backend_nss_getpwnam(struct nss_ops_ctx *nss_context,
+-				     const char *name, struct passwd *pwd,
+-				     char *buffer, size_t buflen,
+-				     struct passwd **result,
+-				     int *lerrno) {
+-	int ret = 0;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = sss_nss_getpwnam_timeout(name, pwd,
+-				       buffer, buflen,
+-				       result,
+-				       SSS_NSS_EX_FLAG_NO_FLAGS,
+-				       nss_context->timeout);
+-
+-	if (ret != 0 && lerrno != NULL) {
+-		/* SSSD translates errno into return code */
+-		*lerrno = ret;
+-	}
+-	return __convert_sss_nss2nss_status(ret);
++                                     const char *name, struct passwd *pwd,
++                                     char *buffer, size_t buflen,
++                                     struct passwd **result,
++                                     int *lerrno) {
++    int ret = 0;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = sss_nss_getpwnam_timeout(name, pwd,
++                                   buffer, buflen,
++                                   result,
++                                   SSS_NSS_EX_FLAG_NO_FLAGS,
++                                   nss_context->timeout);
++
++    /* SSSD uses the same infrastructure to handle sss_nss_get* calls
++     * as nss_sss.so.2 module where 'int *errno' is passed to the helper
++     * but writes down errno into return code so we propagate it in case
++     * of error and translate the return code */
++    if (lerrno != NULL) {
++        *lerrno = ret;
++    }
++    return __convert_sss_nss2nss_status(ret);
+ }
+ 
+ enum nss_status backend_nss_getpwuid(struct nss_ops_ctx *nss_context,
+-				     uid_t uid, struct passwd *pwd,
+-				     char *buffer, size_t buflen,
+-				     struct passwd **result,
+-				     int *lerrno) {
+-
+-	int ret = 0;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = sss_nss_getpwuid_timeout(uid, pwd,
+-				       buffer, buflen,
+-				       result,
+-				       SSS_NSS_EX_FLAG_NO_FLAGS,
+-				       nss_context->timeout);
+-	if (ret != 0 && lerrno != NULL) {
+-		/* SSSD translates errno into return code */
+-		*lerrno = ret;
+-	}
+-	return __convert_sss_nss2nss_status(ret);
++                                     uid_t uid, struct passwd *pwd,
++                                     char *buffer, size_t buflen,
++                                     struct passwd **result,
++                                     int *lerrno) {
++
++    int ret = 0;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = sss_nss_getpwuid_timeout(uid, pwd,
++                                   buffer, buflen,
++                                   result,
++                                   SSS_NSS_EX_FLAG_NO_FLAGS,
++                                   nss_context->timeout);
++
++    /* SSSD uses the same infrastructure to handle sss_nss_get* calls
++     * as nss_sss.so.2 module where 'int *errno' is passed to the helper
++     * but writes down errno into return code so we propagate it in case
++     * of error and translate the return code */
++    if (lerrno != NULL) {
++        *lerrno = ret;
++    }
++    return __convert_sss_nss2nss_status(ret);
+ }
+ 
+ enum nss_status backend_nss_getgrnam(struct nss_ops_ctx *nss_context,
+-				     const char *name, struct group *grp,
+-				     char *buffer, size_t buflen,
+-				     struct group **result,
+-				     int *lerrno) {
+-
+-	int ret = 0;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = sss_nss_getgrnam_timeout(name, grp,
+-				       buffer, buflen,
+-				       result,
+-				       SSS_NSS_EX_FLAG_NO_FLAGS,
+-				       nss_context->timeout);
+-	if (ret != 0 && lerrno != NULL) {
+-		/* SSSD translates errno into return code */
+-		*lerrno = ret;
+-	}
+-	return __convert_sss_nss2nss_status(ret);
++                                     const char *name, struct group *grp,
++                                     char *buffer, size_t buflen,
++                                     struct group **result,
++                                     int *lerrno) {
++
++    int ret = 0;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = sss_nss_getgrnam_timeout(name, grp,
++                                   buffer, buflen,
++                                   result,
++                                   SSS_NSS_EX_FLAG_NO_FLAGS,
++                                   nss_context->timeout);
++
++    /* SSSD uses the same infrastructure to handle sss_nss_get* calls
++     * as nss_sss.so.2 module where 'int *errno' is passed to the helper
++     * but writes down errno into return code so we propagate it in case
++     * of error and translate the return code */
++    if (lerrno != NULL) {
++        *lerrno = ret;
++    }
++    return __convert_sss_nss2nss_status(ret);
+ }
+ 
+ enum nss_status backend_nss_getgrgid(struct nss_ops_ctx *nss_context,
+-				     gid_t gid, struct group *grp,
+-				     char *buffer, size_t buflen,
+-				     struct group **result,
+-				     int *lerrno) {
+-
+-	int ret = 0;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = sss_nss_getgrgid_timeout(gid, grp,
+-				       buffer, buflen,
+-				       result,
+-				       SSS_NSS_EX_FLAG_NO_FLAGS,
+-				       nss_context->timeout);
+-	if (ret != 0 && lerrno != NULL) {
+-		/* SSSD translates errno into return code */
+-		*lerrno = ret;
+-	}
+-	return __convert_sss_nss2nss_status(ret);
++                                     gid_t gid, struct group *grp,
++                                     char *buffer, size_t buflen,
++                                     struct group **result,
++                                     int *lerrno) {
++
++    int ret = 0;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = sss_nss_getgrgid_timeout(gid, grp,
++                                   buffer, buflen,
++                                   result,
++                                   SSS_NSS_EX_FLAG_NO_FLAGS,
++                                   nss_context->timeout);
++
++    /* SSSD uses the same infrastructure to handle sss_nss_get* calls
++     * as nss_sss.so.2 module where 'int *errno' is passed to the helper
++     * but writes down errno into return code so we propagate it in case
++     * of error and translate the return code */
++    if (lerrno != NULL) {
++        *lerrno = ret;
++    }
++    return __convert_sss_nss2nss_status(ret);
+ }
+ 
+ enum nss_status backend_nss_getgrouplist(struct nss_ops_ctx *nss_context,
+-					 const char *name, gid_t group,
+-					 gid_t *groups, int *ngroups,
+-					 int *lerrno) {
+-	int ret = 0;
+-
+-	if (nss_context == NULL) {
+-		return NSS_STATUS_UNAVAIL;
+-	}
+-
+-	ret = sss_nss_getgrouplist_timeout(name, group,
+-					   groups, ngroups,
+-					   SSS_NSS_EX_FLAG_NO_FLAGS,
+-					   nss_context->timeout);
+-	if (ret != 0 && lerrno != NULL) {
+-		/* SSSD translates errno into return code */
+-		*lerrno = ret;
+-	}
+-	return __convert_sss_nss2nss_status(ret);
++                                         const char *name, gid_t group,
++                                         gid_t *groups, int *ngroups,
++                                         int *lerrno) {
++    int ret = 0;
++
++    if (nss_context == NULL) {
++        return NSS_STATUS_UNAVAIL;
++    }
++
++    ret = sss_nss_getgrouplist_timeout(name, group,
++                                       groups, ngroups,
++                                       SSS_NSS_EX_FLAG_NO_FLAGS,
++                                       nss_context->timeout);
++
++    /* SSSD uses the same infrastructure to handle sss_nss_get* calls
++     * as nss_sss.so.2 module where 'int *errno' is passed to the helper
++     * but writes down errno into return code so we propagate it in case
++     * of error and translate the return code */
++    if (lerrno != NULL) {
++        *lerrno = ret;
++    }
++    return __convert_sss_nss2nss_status(ret);
+ }
+ 
+diff --git a/src/back-sch.h b/src/back-sch.h
+index 483e288..2d73f34 100644
+--- a/src/back-sch.h
++++ b/src/back-sch.h
+@@ -154,13 +154,13 @@ int backend_analyze_search_filter(Slapi_Filter *filter, struct backend_search_fi
+ /* NSS backend operations implemented using either nss_sss.so.2 or libsss_nss_idmap API */
+ struct nss_ops_ctx;
+ 
+-void backend_nss_init_context(struct nss_ops_ctx **nss_context);
++int backend_nss_init_context(struct nss_ops_ctx **nss_context);
+ void backend_nss_free_context(struct nss_ops_ctx **nss_context);
+-void backend_nss_set_timeout(struct nss_ops_ctx **nss_context,
++void backend_nss_set_timeout(struct nss_ops_ctx *nss_context,
+ 			     unsigned int timeout);
+-void backend_nss_evict_user(struct nss_ops_ctx **nss_context,
++void backend_nss_evict_user(struct nss_ops_ctx *nss_context,
+ 			    const char *name);
+-void backend_nss_evict_group(struct nss_ops_ctx **nss_context,
++void backend_nss_evict_group(struct nss_ops_ctx *nss_context,
+ 			     const char *name);
+ 
+ void backend_search_nsswitch(struct backend_set_data *set_data,
+diff --git a/src/plug-sch.c b/src/plug-sch.c
+index 6ee4042..0c20a07 100644
+--- a/src/plug-sch.c
++++ b/src/plug-sch.c
+@@ -105,27 +105,33 @@ plugin_startup(Slapi_PBlock *pb)
+ 	Slapi_Entry *plugin_entry = NULL;
+ 	Slapi_DN *pluginsdn = NULL;
+ 	unsigned int nss_timeout = 10000;
++	int ret = 0;
+ 
+ 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
+ 	slapi_pblock_get(pb, SLAPI_TARGET_SDN, &pluginsdn);
+ 	/* plugin base need to be duplicated because it will be destroyed
+ 	 * when pblock is destroyed but we need to use it in a separate thread */
+ 	if (NULL == pluginsdn || 0 == slapi_sdn_get_ndn_len(pluginsdn)) {
+-        slapi_log_error(SLAPI_LOG_FATAL, state->plugin_desc->spd_id,
+-                        "scheman compat plugin_startup: unable to retrieve plugin DN\n");
+-		return -1;
+-
+-    } else {
+-        state->plugin_base = slapi_ch_strdup(slapi_sdn_get_dn(pluginsdn));
+-		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
+-				"configuration entry is %s%s%s\n",
+-				state->plugin_base ? "\"" : "",
+-				state->plugin_base ? state->plugin_base : "NULL",
+-				state->plugin_base ? "\"" : "");
+-    }
++            slapi_log_error(SLAPI_LOG_FATAL, state->plugin_desc->spd_id,
++                            "scheman compat plugin_startup: unable to retrieve plugin DN\n");
++	    return -1;
++        } else {
++            state->plugin_base = slapi_ch_strdup(slapi_sdn_get_dn(pluginsdn));
++	    slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++			    "configuration entry is %s%s%s\n",
++			    state->plugin_base ? "\"" : "",
++			    state->plugin_base ? state->plugin_base : "NULL",
++			    state->plugin_base ? "\"" : "");
++        }
+ 
+ 	state->pam_lock = wrap_new_rwlock();
+-	backend_nss_init_context((struct nss_ops_ctx**) &state->nss_context);
++	ret = backend_nss_init_context((struct nss_ops_ctx**) &state->nss_context);
++	if (ret != 0) {
++	    slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
++			    "failed to intiialize nsswitch backend: [%d]!\n",
++			    ret);
++	    return -1;
++	}
+ 	if ((slapi_pblock_get(pb, SLAPI_PLUGIN_CONFIG_ENTRY, &plugin_entry) == 0) &&
+ 	    (plugin_entry != NULL)) {
+ 		state->use_entry_cache = backend_shr_get_vattr_boolean(state, plugin_entry,
+-- 
+2.14.3
+

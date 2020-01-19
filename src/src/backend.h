@@ -58,6 +58,7 @@ struct backend_shr_set_data {
 
 /* Startup/initialization functions called through the map. */
 void backend_startup(struct slapi_pblock *pb, struct plugin_state *state);
+void backend_shutdown(struct plugin_state *state);
 int backend_init_preop(struct slapi_pblock *pb, struct plugin_state *state);
 int backend_init_betxn_preop(struct slapi_pblock *pb,
 			     struct plugin_state *state);

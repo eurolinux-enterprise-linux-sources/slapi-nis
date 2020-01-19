@@ -33,6 +33,10 @@ struct plugin_state {
 	Slapi_ComponentId *plugin_identity;
 	Slapi_PluginDesc *plugin_desc;
 	unsigned int use_be_txns: 1;
+	PRInt32 ready_to_serve;
+        struct wrapped_mutex *priming_mutex;
+        unsigned int start_priming_thread: 1;   /* flag to allow spawning of the priming thread */
+        struct wrapped_thread *priming_tid; /* priming thread pid. use to join */
 
 	/* NIS-specific data. */
 	struct wrapped_thread *tid;
@@ -46,6 +50,10 @@ struct plugin_state {
 	} listener[4];
 	/* Schema compat-specific data. */
 	struct wrapped_rwlock *pam_lock;
+	void *nss_context;
+	int use_entry_cache;
+	void *cached_entries;
+	struct wrapped_rwlock *cached_entries_lock;
 };
 
 #endif

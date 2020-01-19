@@ -1,0 +1,43 @@
+From 4cd8ef26ceb3f28d103d9b8381b025d9d3f087e5 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Thu, 7 Dec 2017 12:41:15 +0200
+Subject: [PATCH] Use extended SSSD API to signal that an entry should not be
+ cached anymore
+
+When ID override is changed, we remove affected entry from the schema
+compat subtrees. However, we should also signal to SSSD that ID override
+did change and thus SSSD should stop caching the entry. As result, next
+look up of the affected entry should cause a refresh of the data in
+SSSD.
+
+This is important for cases when group membership changes for AD users.
+---
+ src/back-sch.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 1998765..4612051 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -2207,6 +2207,18 @@ backend_entry_evict_if_related(const char *group, const char *set, bool_t flag,
+ 
+ 		/* An entry corresponding to our target is found, evict it */
+ 		map_data_unset_entry(state, group, set, id);
++
++		/* Signal to SSSD that this entry is not cached anymore */
++		switch(set_data->check_nsswitch) {
++                case SCH_NSSWITCH_USER:
++			backend_nss_evict_user(state->nss_context, original_uid);
++			break;
++		case SCH_NSSWITCH_GROUP:
++			backend_nss_evict_group(state->nss_context, original_uid);
++			break;
++		default:
++			break;
++		}
+ 	}
+ 
+ 	slapi_ch_free_string(&id);
+-- 
+2.14.3
+

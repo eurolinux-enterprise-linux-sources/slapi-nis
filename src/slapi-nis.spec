@@ -10,7 +10,7 @@
 %endif
 
 Name:		slapi-nis
-Version:	0.54
+Version:	0.56
 Release:	1%{?dist}
 Summary:	NIS Server and Schema Compatibility plugins for Directory Server
 Group:		System Environment/Daemons
@@ -19,7 +19,7 @@ URL:		http://slapi-nis.fedorahosted.org/
 Source0:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz
 #Source1:	https://fedorahosted.org/releases/s/l/slapi-nis/slapi-nis-%{version}.tar.gz.sig
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires:	389-ds-base-devel, %{ldap_impl}-devel
+BuildRequires:	389-ds-base-devel > 1.3.5.6, %{ldap_impl}-devel
 BuildRequires:	nspr-devel, nss-devel, /usr/bin/rpcgen
 %if 0%{?fedora} > 18 || 0%{?rhel} > 6
 BuildRequires:	libsss_nss_idmap-devel
@@ -85,6 +85,25 @@ rm -rf $RPM_BUILD_ROOT
 %{_sbindir}/nisserver-plugin-defs
 
 %changelog
+* Mon Jun 20 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.56-1
+- Add priming thread to populate the map cache without blocking the DS
+- Add support for changing passwords for users from a primary tree
+  - requires DS 1.3.5.6 or later
+
+* Tue Jan 26 2016 Alexander Bokovoy <abokovoy@redhat.com> - 0.55-1
+- Support external members of IPA groups in schema compat
+- Support bind over ID overrides when uid is not overridden
+- Populate schema compat trees in parallel to LDAP server startup
+
+* Thu Mar 26 2015 Alexander Bokovoy <abokovoy@redhat.com> - 0.54.2-1
+- CVE-2015-0283 slapi-nis: infinite loop in getgrnam_r() and getgrgid_r()
+- Make sure nss_sss.so.2 module is used directly
+- Allow building slapi-nis with ID views against 389-ds-base from RHEL7.0/CentOS7.0 releases
+
+* Thu Nov  6 2014 Alexander Bokovoy <abokovoy@redhat.com> - 0.54.1-1
+- support FreeIPA overrides in LDAP BIND callback
+- ignore FreeIPA override searchs outside configured schema compat subtrees
+
 * Fri Oct 10 2014 Alexander Bokovoy <abokovoy@redhat.com> - 0.54-1
 - Add support for FreeIPA's ID views
 - Allow searching SSSD-provided users as memberUid case-insensitevly
