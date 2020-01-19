@@ -23,7 +23,6 @@
 #define wrap_h
 
 struct wrapped_thread;
-struct wrapped_mutex;
 struct wrapped_rwlock;
 
 struct wrapped_thread * wrap_start_thread(void * (*fn)(struct wrapped_thread *),
@@ -31,11 +30,6 @@ struct wrapped_thread * wrap_start_thread(void * (*fn)(struct wrapped_thread *),
 void *wrap_stop_thread(struct wrapped_thread *t);
 void *wrap_thread_arg(struct wrapped_thread *t);
 int wrap_thread_stopfd(struct wrapped_thread *t);
-
-struct wrapped_mutex *wrap_new_mutex(void);
-void wrap_free_mutex(struct wrapped_mutex *mutex);
-int wrap_mutex_lock(struct wrapped_mutex *mutex);
-int wrap_mutex_unlock(struct wrapped_mutex *mutex);
 
 struct wrapped_rwlock *wrap_new_rwlock(void);
 void wrap_free_rwlock(struct wrapped_rwlock *rwlock);

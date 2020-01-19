@@ -100,10 +100,6 @@
    and to 0 if you don't. */
 #undef HAVE_DECL_SLAPI_PLUGIN_POST_MODRDN_FN
 
-/* Define to 1 if you have the declaration of `SLAPI_PLUGIN_PRE_EXTOP_FN', and
-   to 0 if you don't. */
-#undef HAVE_DECL_SLAPI_PLUGIN_PRE_EXTOP_FN
-
 /* Define if you have <dirsrv/slapi-plugin.h> */
 #undef HAVE_DIRSRV_SLAPI_PLUGIN_H
 
@@ -124,9 +120,6 @@
 
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
-
-/* Define to 1 if you have the <nss.h> header file. */
-#undef HAVE_NSS_H
 
 /* Define to 1 if you have the <rpc/xdr.h> header file. */
 #undef HAVE_RPC_XDR_H
@@ -170,7 +163,8 @@
 /* FreeIPA attr original uid value for user id overrides */
 #undef IPA_IDVIEWS_ATTR_ORIGINALUID
 
-/* Define to the sub-directory where libtool stores uninstalled libraries. */
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
 #undef LT_OBJDIR
 
 /* Define to name of the attribute which lists the containers for entries for

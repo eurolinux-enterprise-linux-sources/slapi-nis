@@ -1,4 +1,4 @@
-AC_INIT(slapi-nis,0.56)
+AC_INIT(slapi-nis,0.54)
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE(foreign)
 LT_INIT([disable-static])
@@ -113,7 +113,6 @@ dirsrv)
 			SLAPI_PLUGIN_BE_TXN_POST_MODIFY_FN,
 			SLAPI_PLUGIN_BE_TXN_POST_MODRDN_FN,
 			SLAPI_PLUGIN_BE_TXN_POST_DELETE_FN,
-			SLAPI_PLUGIN_PRE_EXTOP_FN,
 			NULL]
 		       ,,,
 		       [AC_INCLUDES_DEFAULT
@@ -344,7 +343,6 @@ fi
 AM_CONDITIONAL([USE_PAM], [test "x$use_pam" != xno])
 
 if test "x$use_nsswitch" != xno ; then
-	AC_CHECK_HEADERS([stdint.h nss.h dlfcn.h])
 	if pkg-config sss_nss_idmap 2> /dev/null ; then
 		if test x$use_sss_nss_idmap != xno ; then
 			AC_DEFINE(HAVE_SSS_NSS_IDMAP,1,[Define if you have libsss_nss_idmap.])

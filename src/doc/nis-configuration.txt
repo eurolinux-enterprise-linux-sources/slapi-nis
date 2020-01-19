@@ -80,9 +80,7 @@ beneath the plugin's entry.  These attributes are recognized:
  * nis-filter (optional)
    The filter which is used to select entries for conversion, given as
    an LDAP search filter.  A default value, which varies based on the
-   name of the map, is used if none is specified.  Attributes mentioned
-   in the filter should be indexed and defined with a proper syntax and
-   equality test in the directory server schema.
+   name of the map, is used if none is specified.
  * nis-key-format (required if nis-keys-format is not set)
    A format specifier which the plugin will use to convert the contents
    of the directory server entry into a key for the NIS map.  If the

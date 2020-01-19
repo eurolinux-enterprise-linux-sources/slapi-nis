@@ -32,7 +32,6 @@
 
 #ifdef HAVE_DIRSRV_SLAPI_PLUGIN_H
 #include <nspr.h>
-#include <plhash.h>
 #include <nss.h>
 #include <dirsrv/slapi-plugin.h>
 #else
@@ -53,11 +52,6 @@
 #include "plugin.h"
 #include "map.h"
 #include "back-sch.h"
-
-backend_extop_handlers_t extop_handlers[] = {{EXTOP_PASSWD_OID, (IFP) backend_passwdmod_extop},
-					    {NULL, NULL}};
-static void
-backend_entries_to_return_push(struct backend_search_cbdata *cbdata, Slapi_Entry *e);
 
 #define SCH_CONTAINER_CONFIGURATION_FILTER "(&(" SCH_CONTAINER_CONFIGURATION_GROUP_ATTR "=*)(" SCH_CONTAINER_CONFIGURATION_BASE_ATTR "=*)(" SCH_CONTAINER_CONFIGURATION_FILTER_ATTR "=*)(" SCH_CONTAINER_CONFIGURATION_RDN_ATTR "=*))"
 
@@ -421,115 +415,6 @@ backend_set_operational_attributes(Slapi_Entry *e,
 	}
 }
 
-#ifdef USE_NSSWITCH
-#define IPA_ATTR_EXTERNAL_MEMBER "ipaExternalMember"
-#define IPA_ATTR_MEMBERUID "memberUid"
-static void
-backend_set_process_external_members(Slapi_PBlock *pb,
-				   Slapi_Entry *e,
-				   struct plugin_state *state,
-				   struct backend_set_data *data)
-{
-	Slapi_Attr *attr = NULL;
-	Slapi_ValueSet *valueset = NULL;
-	bool_t is_attr_exists, is_group_exists;
-	struct backend_staged_search staged = {0, };
-	struct backend_search_cbdata cbdata = {0, };
-	char *plugin_id = state->plugin_desc->spd_id;
-
-	is_attr_exists = slapi_entry_attr_find(e, IPA_ATTR_EXTERNAL_MEMBER, &attr) == 0;
-
-	if (!is_attr_exists || attr == NULL) {
-		return;
-	}
-
-	/* There are external members in this entry, do group lookup via SSSD
-	 * and update entry's memberUid attribute */
-
-	staged.name = slapi_entry_attr_get_charptr(e, "cn");
-	staged.type = SCH_NSSWITCH_GROUP;
-	staged.search_members = FALSE;
-	staged.is_id = FALSE;
-	staged.is_sid = FALSE;
-	staged.container_sdn = (char*) slapi_sdn_get_dn(data->container_sdn);
-	staged.entries = NULL;
-	staged.count = 0;
-	cbdata.nsswitch_buffer_len = MAX(16384, MAX(sysconf(_SC_GETPW_R_SIZE_MAX), sysconf(_SC_GETGR_R_SIZE_MAX)));
-	cbdata.nsswitch_buffer = malloc(cbdata.nsswitch_buffer_len);
-	cbdata.state = state;
-	cbdata.staged = &staged;
-
-	slapi_log_error(SLAPI_LOG_PLUGIN, plugin_id,
-			"refreshing group membership for group \"%s\"\n", staged.name);
-
-	do {
-		/* This group must exist because it exists in the original tree
-		 * but as dirsrv was restarted, SSSD might still consider its domain offline. */
-		is_group_exists = backend_retrieve_from_nsswitch(&staged, &cbdata);
-		if (!is_group_exists) {
-			slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
-					"group \"%s\" does not exist because SSSD is offline.\n",
-					staged.name);
-			if (state->ready_to_serve == 0) {
-				/* Only wait for SSSD when we populate the original set */
-				slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
-						"waiting for SSSD to become online...\n");
-				DS_Sleep(PR_SecondsToInterval(35));
-			} else {
-				break;
-			}
-		}
-	} while (!is_group_exists);
-
-	if (staged.entries != NULL && staged.entries[0] != NULL) {
-			attr = NULL;
-			if (slapi_entry_attr_find(staged.entries[0], IPA_ATTR_MEMBERUID, &attr) == 0) {
-#if 0
-				/* Debug output of original and updated memberUid values */
-				char **ary1, **ary2;
-				ary1 = slapi_entry_attr_get_charray(e, "memberUid");
-				ary2 = slapi_entry_attr_get_charray(staged.entries[0], "memberUid");
-
-				slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
-						"original group \"%s\":\n", staged.name);
-				for (int i = 0; ary1 && ary1[i] != NULL; ++i) {
-					slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
-							"\t> %s\n", ary1[i]);
-				}
-				slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
-						"new group \"%s\":\n", staged.name);
-				for (int i = 0; ary2 && ary2[i] != NULL; ++i) {
-					slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
-							"\t> %s\n", ary2[i]);
-				}
-				slapi_ch_array_free(ary2);
-				slapi_ch_array_free(ary1);
-#endif
-
-				(void)slapi_attr_get_valueset(attr, &valueset);
-
-				if (slapi_entry_attr_find(e, IPA_ATTR_MEMBERUID, &attr) == 0) {
-					(void) slapi_entry_attr_delete(e, IPA_ATTR_MEMBERUID);
-				}
-				(void) slapi_entry_add_valueset(e, IPA_ATTR_MEMBERUID, valueset);
-				slapi_valueset_free(valueset);
-			} else {
-				slapi_log_error(SLAPI_LOG_PLUGIN, plugin_id,
-						"group \"%s\" doesn't have memberUid attribute\n", staged.name);
-			}
-			slapi_entry_free(staged.entries[0]);
-	}
-
-	if (staged.entries != NULL) {
-		free(staged.entries);
-	}
-
-	(void)slapi_entry_attr_delete(e, IPA_ATTR_EXTERNAL_MEMBER);
-	free(cbdata.nsswitch_buffer);
-	slapi_ch_free_string(&staged.name);
-}
-#endif
-
 /* Given a map-entry directory entry, determine a key, a value, and extra data
  * to be stored in the map cache, and add them to the map cache. */
 static void
@@ -724,9 +609,6 @@ backend_set_entry_from(Slapi_PBlock *pb, enum backend_entry_source source,
 		slapi_entry_add_string(entry,
 				       "objectClass", "extensibleObject");
 	}
-#ifdef USE_NSSWITCH
-	backend_set_process_external_members(pb, entry, data->common.state, data);
-#endif
 	/* Clean up the entry by doing a round trip through the LDIF parser. */
 	ldif = slapi_entry2str(entry, &len);
 	slapi_entry_free(entry);
@@ -1114,12 +996,10 @@ backend_search_entry_cb(const char *domain, const char *map, bool_t secure,
 			void *backend_data, void *cb_data)
 {
 	Slapi_DN *sdn;
-	Slapi_Entry *entry = NULL; /* prevent to free an uninitialized entry */
-	Slapi_Attr *attr = NULL;
+	Slapi_Entry *entry;
 	struct backend_search_cbdata *cbdata;
 	struct backend_entry_data *entry_data;
 	int result;
-	bool_t is_attr_exists = FALSE;
 
 	cbdata = cb_data;
 	entry_data = backend_data;
@@ -1157,24 +1037,18 @@ backend_search_entry_cb(const char *domain, const char *map, bool_t secure,
 				slapi_sdn_get_ndn(sdn));
 		entry = entry_data->e;
 #ifdef USE_IPA_IDVIEWS
+		entry = slapi_entry_dup(entry_data->e);
 		if (cbdata->idview != NULL) {
-			entry = slapi_entry_dup(entry_data->e);
-			if (entry != NULL) {
-				idview_process_overrides(cbdata, key, map, domain, entry);
+			idview_process_overrides(cbdata, key, map, domain, entry);
+		}
 
-				/* slapi_entry_attr_exists() was introduced only in https://fedorahosted.org/389/ticket/47710 */
-				is_attr_exists = slapi_entry_attr_find(entry, IPA_IDVIEWS_ATTR_ANCHORUUID, &attr) == 0;
-
-				if (is_attr_exists == TRUE) {
-					slapi_entry_attr_delete(entry, IPA_IDVIEWS_ATTR_ANCHORUUID);
-					slapi_entry_delete_string(entry, "objectClass", "ipaOverrideTarget");
-				}
-			} else {
-				entry = entry_data->e;
-			}
+		if (slapi_entry_attr_exists(entry, IPA_IDVIEWS_ATTR_ANCHORUUID) == 1) {
+			slapi_entry_attr_delete(entry, IPA_IDVIEWS_ATTR_ANCHORUUID);
+			slapi_entry_delete_string(entry, "objectClass", "ipaOverrideTarget");
 		}
 #endif
-		backend_entries_to_return_push(cbdata, entry);
+		slapi_send_ldap_search_entry(cbdata->pb, entry, NULL,
+					     cbdata->attrs, cbdata->attrsonly);
 		cbdata->n_entries++;
 
 		if (entry != entry_data->e) {
@@ -1191,7 +1065,7 @@ backend_search_set_cb(const char *group, const char *set, bool_t flag,
 {
 	struct backend_search_cbdata *cbdata;
 	struct backend_set_data *set_data;
-	Slapi_Entry *set_entry = NULL ; /* prevent to free an uninitialized entry */
+	Slapi_Entry *set_entry;
 	int result, n_entries;
 	int n_entries_without_nsswitch;
 	const char *ndn;
@@ -1245,11 +1119,12 @@ backend_search_set_cb(const char *group, const char *set, bool_t flag,
 							 set_data->common.group, set_entry);
 			}
 #endif
-			backend_entries_to_return_push(cbdata, set_entry);
+			slapi_send_ldap_search_entry(cbdata->pb, set_entry,
+						     NULL, cbdata->attrs,
+						     cbdata->attrsonly);
 			cbdata->n_entries++;
 			break;
 		}
-
 		slapi_entry_free(set_entry);
 	}
 
@@ -1291,56 +1166,6 @@ backend_search_set_cb(const char *group, const char *set, bool_t flag,
 	return TRUE;
 }
 
-/* Routines to search if a target DN is within any of the sets we handle */
-static bool_t
-backend_search_find_set_dn_in_group_cb(const char *group, const char *set, bool_t flag,
-					 void *backend_data, void *cb_data)
-{
-	struct backend_search_cbdata *cbdata;
-	struct backend_set_data *set_data;
-
-	cbdata = cb_data;
-	set_data = backend_data;
-
-	if (slapi_sdn_scope_test(cbdata->target_dn,
-				 set_data->container_sdn,
-				 cbdata->scope) == 1) {
-		cbdata->answer = TRUE;
-	}
-
-	if (slapi_sdn_compare(set_data->container_sdn,
-			      cbdata->target_dn) == 0) {
-		cbdata->answer = TRUE;
-	}
-
-	return TRUE;
-
-}
-
-static bool_t
-backend_search_find_set_dn_cb(const char *group, void *cb_data)
-{
-	struct backend_search_cbdata *cbdata;
-	Slapi_DN *group_dn;
-
-	cbdata = cb_data;
-
-	/* Check the group itself. */
-	group_dn = slapi_sdn_new_dn_byval(group);
-	if (slapi_sdn_scope_test(group_dn, cbdata->target_dn,
-				 cbdata->scope) == 1) {
-		cbdata->answer = TRUE;
-		slapi_sdn_free(&group_dn);
-		return TRUE;
-	}
-
-	map_data_foreach_map(cbdata->state, group,
-			     backend_search_find_set_dn_in_group_cb, cb_data);
-	slapi_sdn_free(&group_dn);
-	return TRUE;
-}
-
-/* Routines to find out the set that has the same group as requested */
 static bool_t
 backend_search_find_set_data_in_group_cb(const char *group, const char *set, bool_t flag,
 					 void *backend_data, void *cb_data)
@@ -1376,7 +1201,7 @@ backend_search_group_cb(const char *group, void *cb_data)
 {
 	struct backend_search_cbdata *cbdata;
 	Slapi_DN *group_dn;
-	Slapi_Entry *group_entry = NULL; /* prevent to free an uninitialized entry */
+	Slapi_Entry *group_entry;
 	int result, n_maps;
 
 	cbdata = cb_data;
@@ -1411,11 +1236,12 @@ backend_search_group_cb(const char *group, void *cb_data)
 				idview_process_overrides(cbdata, NULL, NULL, group, group_entry);
 			}
 #endif
-			backend_entries_to_return_push(cbdata, group_entry);
+			slapi_send_ldap_search_entry(cbdata->pb, group_entry,
+						     NULL, cbdata->attrs,
+						     cbdata->attrsonly);
 			cbdata->n_entries++;
 			break;
 		}
-
 		slapi_entry_free(group_entry);
 	}
 
@@ -1474,168 +1300,23 @@ backend_sch_scope_as_string(int scope)
 	return "";
 }
 
-/* The entries are pushed (added) at the end of the list
- * so that they will be send in the head->tail order
- */
-static void
-backend_entries_to_return_push(struct backend_search_cbdata *cbdata, Slapi_Entry *e)
-{
-	struct entries_to_send *e_to_send = NULL;
-	struct cached_entry *entry = NULL;
-	bool_t dont_cache = FALSE;
-	PLHashTable* ht = (PLHashTable*) cbdata->state->cached_entries;
-
-	if ((cbdata == NULL) || (e == NULL)) return;
-
-	e_to_send = (struct entries_to_send *) slapi_ch_calloc(1, sizeof(struct entries_to_send));
-
-	dont_cache = cbdata->state->use_entry_cache ? FALSE : TRUE;
-
-	if (!wrap_rwlock_wrlock(cbdata->state->cached_entries_lock)) {
-		entry = PL_HashTableLookup(ht, slapi_entry_get_ndn(e));
-		if (entry != NULL) {
-			/* There is an entry in the hash table but is it the same? */
-			char *e_modifyTimestamp = slapi_entry_attr_get_charptr(e, "modifyTimestamp");
-			char *entry_modifyTimestamp = slapi_entry_attr_get_charptr(entry->entry, "modifyTimestamp");
-			unsigned long e_usn = slapi_entry_attr_get_ulong(e, "entryUSN");
-			unsigned long entry_usn = slapi_entry_attr_get_ulong(entry->entry, "entryUSN");
-			int res = -1;
-
-			/* Our comparison strategy is following:
-			 * - compare modifyTimestamp values first,
-			 * - if they are the same (modifyTimestamp in slapi-nis is down to a second precision),
-			 *   compare entryUSN values if they exist
-			 * - default to not using the cached entry to be on safe side if both comparisons don't
-			 *   give us a definite answer */
-			if ((e_modifyTimestamp != NULL) && (entry_modifyTimestamp != NULL)) {
-				res = strncmp(e_modifyTimestamp, entry_modifyTimestamp, strlen(e_modifyTimestamp));
-			}
-
-			if ((res == 0) && ((e_usn != 0) && (entry_usn != 0))) {
-				res = e_usn != entry_usn ? 1 : 0;
-			}
-
-			if (res != 0) {
-				/* Cached entry is different, evict it from the hash table */
-				(void) PL_HashTableRemove(ht, slapi_entry_get_ndn(entry->entry));
-
-				/* We don't want to clear the entry because it is still in use by other thread.
-				 * Instead, we'll insert new entry into hash table, let the linked list in other
-				 * search to remove the entry itself, but mark it as non-cached. */
-				entry->not_cached = TRUE;
-				entry = NULL;
-			} else {
-				slapi_log_error(SLAPI_LOG_PLUGIN,
-					cbdata->state->plugin_desc->spd_id,
-					"referenced entry [%s], USNs: %ld vs %ld, [%s] vs [%s]\n",
-					slapi_entry_get_ndn(e), e_usn, entry_usn, e_modifyTimestamp, entry_modifyTimestamp);
-				/* It is the same entry, reference it for us */
-				(void) PR_AtomicIncrement(&entry->refcount);
-			}
-
-			if (e_modifyTimestamp != NULL)
-				slapi_ch_free_string(&e_modifyTimestamp);
-			if (entry_modifyTimestamp != NULL)
-				slapi_ch_free_string(&entry_modifyTimestamp);
-		}
-
-		if (entry == NULL) {
-			/* no cached entry for this DN */
-			entry = (struct cached_entry *) slapi_ch_calloc(1, sizeof(struct cached_entry));
-			entry->entry = slapi_entry_dup(e);
-			entry->not_cached = FALSE;
-			(void) PR_AtomicSet(&entry->refcount, 1);
-			if ((ht != NULL) && (entry->entry != NULL) && (!dont_cache)) {
-				(void) PL_HashTableAdd(ht, slapi_entry_get_ndn(entry->entry), entry);
-			}
-		}
-
-		wrap_rwlock_unlock(cbdata->state->cached_entries_lock);
-	}
-
-	e_to_send->entry = entry;
-	if (cbdata->entries_tail == NULL) {
-		/* First entry in that list */
-		cbdata->entries_tail = e_to_send;
-		cbdata->entries_head = e_to_send;
-	} else {
-		cbdata->entries_tail->next = e_to_send;
-		cbdata->entries_tail = e_to_send;
-	}
-}
-
-static void
-backend_send_mapped_entries(struct backend_search_cbdata *cbdata)
-{
-	struct entries_to_send *e_to_send, *next;
-	PLHashTable* ht = NULL;
-	int i = 0;
-	PRInt32 count;
-
-	if (cbdata == NULL) return;
-	ht = (PLHashTable*) cbdata->state->cached_entries;
-
-	/* iterate from head->tail sending the stored entries */
-	for (e_to_send = cbdata->entries_head, i = 0; e_to_send != NULL; i++) {
-		next = e_to_send->next;
-		if (e_to_send->entry->refcount > 0) {
-			slapi_send_ldap_search_entry(cbdata->pb, e_to_send->entry->entry, NULL,
-						     cbdata->attrs, cbdata->attrsonly);
-
-			/* Clean up entry only if there is no reference to it any more in any outstanding request */
-			wrap_rwlock_wrlock(cbdata->state->cached_entries_lock);
-			count = PR_AtomicDecrement(&e_to_send->entry->refcount);
-			if (count == 0) {
-				if (!e_to_send->entry->not_cached) {
-					(void) PL_HashTableRemove(ht, slapi_entry_get_ndn(e_to_send->entry->entry));
-				}
-				/* free this returned entry */
-				slapi_entry_free(e_to_send->entry->entry);
-				e_to_send->entry->entry = NULL;
-				slapi_ch_free((void **) &e_to_send->entry);
-				e_to_send->entry = NULL;
-			}
-			wrap_rwlock_unlock(cbdata->state->cached_entries_lock);
-		}
-
-		/* Otherwise only free list item */
-		slapi_ch_free((void **) &e_to_send);
-		e_to_send = next;
-	}
-	cbdata->entries_head = NULL;
-	cbdata->entries_tail = NULL;
-}
-
 static int
 backend_search_cb(Slapi_PBlock *pb)
 {
 	struct backend_search_cbdata cbdata;
 	struct backend_staged_search *staged, *next;
-	int i, isroot, ret;
+	int i;
 
 	if (wrap_get_call_level() > 0) {
 		return 0;
 	}
 	memset(&cbdata, 0, sizeof(cbdata));
 	cbdata.pb = pb;
-	ret = slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &cbdata.state);
-	if ((ret == -1) || (cbdata.state->plugin_base == NULL)) {
+	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &cbdata.state);
+	if (cbdata.state->plugin_base == NULL) {
 		/* The plugin was not actually started. */
 		return 0;
 	}
-	if (cbdata.state->ready_to_serve == 0) {
-		/* No data to serve yet */
-		return 0;
-	}
-
-	ret = slapi_pblock_get(pb, SLAPI_REQUESTOR_ISROOT, &isroot);
-
-	if ((ret == -1) || (slapi_op_internal(pb) || (slapi_is_ldapi_conn(pb) && isroot))) {
-		/* The plugin should not engage in internal searches of other
-		 * plugins or ldapi+cn=DM */
-		return 0;
-	}
-
 	slapi_pblock_get(pb, SLAPI_SEARCH_TARGET, &cbdata.target);
 	slapi_pblock_get(pb, SLAPI_SEARCH_SCOPE, &cbdata.scope);
 	slapi_pblock_get(pb, SLAPI_SEARCH_SIZELIMIT, &cbdata.sizelimit);
@@ -1659,6 +1340,9 @@ backend_search_cb(Slapi_PBlock *pb)
 			"searching from \"%s\" for \"%s\" with scope %d%s\n",
 			cbdata.target, cbdata.strfilter, cbdata.scope,
 			backend_sch_scope_as_string(cbdata.scope));
+#ifdef USE_IPA_IDVIEWS
+	idview_replace_target_dn(&cbdata.target, &cbdata.idview);
+#endif
 	cbdata.target_dn = slapi_sdn_new_dn_byval(cbdata.target);
 	/* Check if there's a backend handling this search. */
 	if (!slapi_be_exist(cbdata.target_dn)) {
@@ -1667,47 +1351,19 @@ backend_search_cb(Slapi_PBlock *pb)
 				"slapi_be_exists(\"%s\") = 0, "
 				"ignoring search\n", cbdata.target);
 		slapi_sdn_free(&cbdata.target_dn);
+		if (cbdata.idview != NULL) {
+			slapi_ch_free_string(&cbdata.target);
+		}
+		slapi_ch_free_string(&cbdata.idview);
+#ifdef USE_IPA_IDVIEWS
+		idview_free_overrides(&cbdata);
+#endif
 		return 0;
 	}
-
-#ifdef USE_IPA_IDVIEWS
-	/* We may have multiple disjoint trees in the sets, search if the target matches any of them
-	 * as in general there don't have to be a single subtree (cn=compat,$SUFFIX) for all trees to easily
-	 * detect the ID view use. Unless the ID view is within the set we control, don't consider the override */
-	map_data_foreach_domain(cbdata.state, backend_search_find_set_dn_cb, &cbdata);
-	if (cbdata.answer == FALSE) {
-		idview_replace_target_dn(&cbdata.target, &cbdata.idview);
-		if (cbdata.idview != NULL) {
-			slapi_sdn_free(&cbdata.target_dn);
-			/* Perform another check, now for rewritten DN */
-			cbdata.target_dn = slapi_sdn_new_dn_byval(cbdata.target);
-			map_data_foreach_domain(cbdata.state, backend_search_find_set_dn_cb, &cbdata);
-			/* Rewritten DN might still be outside of our trees */
-			if (cbdata.answer == TRUE) {
-				slapi_log_error(SLAPI_LOG_PLUGIN, cbdata.state->plugin_desc->spd_id,
-						"Use of ID view '%s' is detected, searching from \"%s\" "
-						"for \"%s\" with scope %d%s. Filter may get overridden later.\n",
-						cbdata.idview, cbdata.target, cbdata.strfilter, cbdata.scope,
-						backend_sch_scope_as_string(cbdata.scope));
-			} else {
-				slapi_sdn_free(&cbdata.target_dn);
-				slapi_ch_free_string(&cbdata.target);
-				slapi_ch_free_string(&cbdata.idview);
-				slapi_log_error(SLAPI_LOG_PLUGIN,
-						cbdata.state->plugin_desc->spd_id,
-						"The search base didn't match any of the containers, "
-						"ignoring search\n");
-				return 0;
-			}
-		}
-	}
-	cbdata.answer = FALSE;
-#endif
 
 	/* Walk the list of groups. */
 	wrap_inc_call_level();
 #ifdef USE_IPA_IDVIEWS
-	/* Filter replacement requires increased call level as we may fetch overrides and thus come back here */
 	idview_replace_filter(&cbdata);
 #endif
 	if (map_rdlock() == 0) {
@@ -1719,14 +1375,15 @@ backend_search_cb(Slapi_PBlock *pb)
 				cbdata.state->plugin_desc->spd_id,
 				"unable to acquire read lock\n");
 	}
-	/* Return existing collected entries */
-	backend_send_mapped_entries(&cbdata);
 	wrap_dec_call_level();
 #ifdef USE_NSSWITCH
 	/* If during search of some sets we staged additional lookups, perform them. */
 	if (cbdata.staged != NULL) {
 		/* Allocate buffer to be used for getpwnam_r/getgrnam_r requests */
-		cbdata.nsswitch_buffer_len = MAX(16384, MAX(sysconf(_SC_GETPW_R_SIZE_MAX), sysconf(_SC_GETGR_R_SIZE_MAX)));
+		cbdata.nsswitch_buffer_len = MAX(sysconf(_SC_GETPW_R_SIZE_MAX), sysconf(_SC_GETGR_R_SIZE_MAX));
+		if (cbdata.nsswitch_buffer_len == -1) {
+			cbdata.nsswitch_buffer_len = 16384;
+		}
 		cbdata.nsswitch_buffer = malloc(cbdata.nsswitch_buffer_len);
 		/* Go over the list of staged requests and retrieve entries.
 		 * It is important to perform the retrieval *without* holding any locks to the map cache */
@@ -1803,8 +1460,6 @@ backend_search_cb(Slapi_PBlock *pb)
 		if (map_rdlock() == 0) {
 			map_data_foreach_domain(cbdata.state, backend_search_group_cb, &cbdata);
 			map_unlock();
-			/* Return newly acquired entries */
-			backend_send_mapped_entries(&cbdata);
 		} else {
 			slapi_log_error(SLAPI_LOG_PLUGIN,
 					cbdata.state->plugin_desc->spd_id,
@@ -1913,6 +1568,7 @@ static void
 backend_locate(Slapi_PBlock *pb, struct backend_entry_data **data, const char **group, const char**set)
 {
 	struct backend_locate_cbdata cbdata;
+	char *idview = NULL;
 
 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &cbdata.state);
 	if (cbdata.state->plugin_base == NULL) {
@@ -1921,64 +1577,22 @@ backend_locate(Slapi_PBlock *pb, struct backend_entry_data **data, const char **
 		return;
 	}
 	slapi_pblock_get(pb, SLAPI_TARGET_DN, &cbdata.target);
-
+#ifdef USE_IPA_IDVIEWS
+	idview_replace_target_dn(&cbdata.target, &idview);
+#endif
 	cbdata.target_dn = slapi_sdn_new_dn_byval(cbdata.target);
 	cbdata.entry_data = NULL;
 	cbdata.entry_group = NULL;
 	cbdata.entry_set = NULL;
 	map_data_foreach_map(cbdata.state, NULL, backend_locate_cb, &cbdata);
-#ifdef USE_IPA_IDVIEWS
-	/* In case nothing was found but we are operating on the ID override,
-	 * rebuild the target's RDN to use original attribute's value */
-	if (cbdata.entry_data == NULL) {
-		char *idview = NULL;
-		char *target, *original_target;
-		target = original_target = slapi_ch_strdup(cbdata.target);
-		idview_replace_target_dn(&target, &idview);
-		if (target != original_target) {
-			slapi_ch_free_string(&original_target);
-		}
-		if (idview != NULL) {
-			char *rdnstr;
-			char *val;
-			struct berval bval;
-			int res;
-			struct backend_search_cbdata scbdata;
-			Slapi_RDN *rdn = slapi_rdn_new_all_dn(target);
-			if (rdn != NULL) {
-				res = slapi_rdn_get_first(rdn, &rdnstr, &val);
-				if (res == 1) {
-					bval.bv_len = strlen(val) + 1;
-					bval.bv_val = slapi_ch_strdup(val);
-					memset(&scbdata, 0, sizeof(scbdata));
-					scbdata.idview = idview;
-					scbdata.target = target;
-					scbdata.pb = pb;
-					scbdata.state = cbdata.state;
-					scbdata.target_dn = slapi_sdn_new_dn_byval(target);
-					res = idview_replace_bval_by_override("rdn", rdnstr, &bval, &scbdata);
-					/* only accept uid overrides */
-					if (res == 1) {
-						slapi_rdn_remove_index(rdn, 1);
-						slapi_rdn_add(rdn, "uid", bval.bv_val);
-					}
-					slapi_sdn_free(&cbdata.target_dn);
-					cbdata.target_dn = slapi_sdn_set_rdn(scbdata.target_dn, rdn);
-					map_data_foreach_map(cbdata.state, NULL, backend_locate_cb, &cbdata);
-					slapi_ber_bvdone(&bval);
-					slapi_rdn_free(&rdn);
-					idview_free_overrides(&scbdata);
-				}
-			}
-		}
-		slapi_ch_free_string(&target);
-		slapi_ch_free_string(&idview);
-	}
-#endif
 	*data = cbdata.entry_data;
 	*group = cbdata.entry_group;
 	*set = cbdata.entry_set;
 	slapi_sdn_free(&cbdata.target_dn);
+	if (idview != NULL) {
+		slapi_ch_free_string(&cbdata.target);
+	}
+	slapi_ch_free_string(&idview);
 }
 
 /* Check if the target DN is part of this group's tree.  If it is, return an
@@ -2031,10 +1645,6 @@ backend_write_cb(Slapi_PBlock *pb, struct plugin_state *state)
 	int ret;
 
 	if (wrap_get_call_level() > 0) {
-		return 0;
-	}
-	if (state->ready_to_serve == 0) {
-		/* No data to serve yet */
 		return 0;
 	}
 
@@ -2144,10 +1754,6 @@ backend_bind_cb(Slapi_PBlock *pb)
 	}
 
 	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
-	if (state->ready_to_serve == 0) {
-		/* No data to serve yet */
-		return 0;
-	}
 	/* The code below handles three separate facts:
 	 * 1. For NSSWITCH-discovered users PAM is responsible for authentication.
 	 *    We want to run PAM auth without any slapi-nis lock taken to avoid
@@ -2225,191 +1831,6 @@ done_with_lock:
 	return ret;
 }
 
-/* This callback handles EXTOP_PASSWD_OID "1.3.6.1.4.1.4203.1.11.1"
- * If the extop defines a USERID, it sets SLAPI_TARGET_SDN to
- * the reverse mapping of the USERID.
- *
- * If it is not possible to retrieve USERID in the ber
- * then value of SLAPI_TARGET_SDN is unchanged.
- *
- * Else the value of SLAPI_TARGET_SDN is freed and replaced
- * either by the USERID or the reverse mapping of USERID (if it exists)
- */
-static int
-backend_passwdmod_extop(Slapi_PBlock *pb)
-{
-	struct backend_entry_data *data;
-	struct plugin_state *state;
-	Slapi_DN *sdn = NULL;
-	char *extopdn;
-	char *ndn;
-	const char *entry_group = NULL;
-	const char *entry_set = NULL;
-	struct berval	*extop_value = NULL;
-	BerElement	*ber = NULL;
-	ber_tag_t	tag = 0;
-        ber_len_t	len = (ber_len_t) -1;
-
-	if (wrap_get_call_level() > 0) {
-		return 0;
-	}
-
-	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
-	if (state->ready_to_serve == 0) {
-		/* No data to serve yet */
-		goto free_and_return;
-	}
-	/* Retrieve the original DN from the ber request */
-	/* Get the ber value of the extended operation */
-	slapi_pblock_get(pb, SLAPI_EXT_OP_REQ_VALUE, &extop_value);
-	if (!BV_HAS_DATA(extop_value)) {
-		goto free_and_return;
-	}
-
-        if ((ber = ber_init(extop_value)) == NULL) {
-		goto free_and_return;
-	}
-
-	/* Format of request to parse
-	 *
-	 * PasswdModifyRequestValue ::= SEQUENCE {
-	 * userIdentity    [0]  OCTET STRING OPTIONAL
-	 * oldPasswd       [1]  OCTET STRING OPTIONAL
-	 * newPasswd       [2]  OCTET STRING OPTIONAL }
-	 *
-	 * The request value field is optional. If it is
-	 * provided, at least one field must be filled in.
-	 */
-
-	/* ber parse code */
-	if ( ber_scanf( ber, "{") == LBER_ERROR ) {
-		/* The request field wasn't provided.  We'll
-		 * now try to determine the userid and verify
-		 * knowledge of the old password via other
-		 * means.
-		 */
-		goto free_and_return;
-	} else {
-		tag = ber_peek_tag( ber, &len);
-	}
-
-	/* identify userID field by tags */
-	if (tag == LDAP_EXTOP_PASSMOD_TAG_USERID ) {
-
-		if ( ber_scanf( ber, "a", &extopdn) == LBER_ERROR ) {
-			slapi_ch_free_string(&extopdn);
-			goto free_and_return;
-		}
-
-                slapi_log_error(SLAPI_LOG_PLUGIN, "backend_passwdmod_extop",
-			"extopdn = %s\n", extopdn ? extopdn : "<unknown>" );
-
-		/* Free the current target_DN */
-		slapi_pblock_get(pb, SLAPI_TARGET_SDN, &sdn);
-		if (sdn) {
-			const char *olddn;
-			olddn = slapi_sdn_get_ndn(sdn);
-			slapi_log_error(SLAPI_LOG_PLUGIN, "backend_passwdmod_extop",
-							  "olddn = %s (unknown expected)\n", olddn ? olddn : "<unknown>" );
-			slapi_sdn_free(&sdn);
-		}
-
-		/* replace it with the one in the extop req*/
-		sdn = slapi_sdn_new_dn_byref(extopdn);
-		slapi_pblock_set(pb, SLAPI_TARGET_SDN, sdn);
-	} else {
-		/* we can not retrieve the USERID */
-		goto free_and_return;
-	}
-
-	wrap_inc_call_level();
-	if (map_rdlock() != 0) {
-		slapi_log_error(SLAPI_LOG_FATAL, state->plugin_desc->spd_id,
-				"backend_passwdmod_extop unable to acquire read lock\n");
-		wrap_dec_call_level();
-		goto free_and_return;
-	}
-	backend_locate(pb, &data, &entry_group, &entry_set);
-	if (data != NULL) {
-		/* If there is a mapping to a real entry
-		 * ndn will contains its DN
-		 */
-		if (slapi_sdn_get_ndn(data->original_entry_dn)) {
-			ndn = slapi_ch_strdup(slapi_sdn_get_ndn(data->original_entry_dn));
-		} else {
-			ndn = NULL;
-		}
-		slapi_log_error(SLAPI_LOG_PLUGIN, "backend_passwdmod_extop",
-				"reverse mapped dn = %s\n", ndn ? ndn : "<unknown>" );
-
-		/* the rest does not require to hold the map lock */
-		map_unlock();
-		wrap_dec_call_level();
-
-		if (ndn) {
-			/* replace the TARGET_SDN by the one found in the map
-			 * This is the responsibility of the extop to free it
-			 */
-			slapi_pblock_get(pb, SLAPI_TARGET_SDN, &sdn);
-			if (sdn != NULL) {
-				slapi_sdn_free(&sdn);
-			}
-			sdn = slapi_sdn_new_dn_byref(ndn);
-			slapi_pblock_set(pb, SLAPI_TARGET_SDN, (void*) sdn);
-		}
-	} else {
-		/* no mapping entry to real entry, this is fine */
-		map_unlock();
-		wrap_dec_call_level();
-	}
-
-free_and_return:
-
-	if ( ber != NULL ){
-		ber_free(ber, 1);
-		ber = NULL;
-	}
-	return 0;
-}
-static int
-backend_extop_cb(Slapi_PBlock *pb)
-{
-	struct plugin_state *state;
-	int ret;
-	int i;
-	char *oid = NULL;
-	IFP fct = NULL;
-
-	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &state);
-	if (state->ready_to_serve == 0) {
-		/* No data to serve yet */
-		return 0;
-	}
-
-	/* First check this is a supported OID (for slapi-nis) */
-	if ( slapi_pblock_get( pb, SLAPI_EXT_OP_REQ_OID, &oid ) != 0 )
-	{
-		slapi_log_error( SLAPI_LOG_FATAL, state->plugin_desc->spd_id, "Could not get OID from request\n" );
-		return 0;
-	}
-
-	for (i = 0; extop_handlers[i].oid != NULL; i++) {
-		if (strcmp( oid, extop_handlers[i].oid) == 0 ) {
-			fct = extop_handlers[i].extop_fct;
-			break;
-		}
-	}
-
-	if (fct) {
-		ret = fct(pb);
-		if (ret) {
-			slapi_log_error( SLAPI_LOG_FATAL, "backend_extop_cb",
-				 "pre-extop for %s failed %d\n", oid, ret );
-		}
-	}
-	return (ret);
-}
-
 static int
 backend_compare_cb(Slapi_PBlock *pb)
 {
@@ -2465,30 +1886,6 @@ void
 backend_startup(Slapi_PBlock *pb, struct plugin_state *state)
 {
 	backend_shr_startup(state, pb, SCH_CONTAINER_CONFIGURATION_FILTER);
-}
-
-void
-backend_shutdown(struct plugin_state *state)
-{
-    backend_shr_shutdown(state);
-}
-
-#ifndef SLAPI_PLUGIN_PRE_EXTOP_FN
-#define SLAPI_PLUGIN_PRE_EXTOP_FN  413
-#endif
-int
-backend_init_extop(Slapi_PBlock *pb, struct plugin_state *state)
-{
-	slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
-			"hooking up extop callbacks\n");
-	/* Intercept extended operation requests */
-	if (slapi_pblock_set(pb, SLAPI_PLUGIN_PRE_EXTOP_FN,
-			     backend_extop_cb) != 0) {
-		slapi_log_error(SLAPI_LOG_PLUGIN, state->plugin_desc->spd_id,
-				"error hooking up pre extop callback\n");
-		return -1;
-	}
-	return 0;
 }
 
 int

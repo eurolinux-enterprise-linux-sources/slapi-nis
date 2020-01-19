@@ -1,0 +1,117 @@
+From 00468e8eebd455ab4e41d4d86772fb5f8a745d0a Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Thu, 21 Jan 2016 19:16:30 +0200
+Subject: [PATCH 11/12] idviews: bind with original DN if ID view does not
+ override uid attribute
+
+With ID Views in FreeIPA one can override different kinds of attributes,
+including the uid. When uid attribute is overriden, LDAP BINDs with
+DNs using new (overridden) uid are properly modified to reference the
+original (non-overridden) object.
+
+However, when uid attribute is not overridden, slapi-nis did mistakenly
+avoided to build a reference to the original object without ID view.
+This resulted in inability to do LDAP BIND as overriden DN with original
+uid attribute.
+
+Fix the issue by always processing a DN after removing ID view reference
+from it, whether RDN value (uid) was replaced or not.
+
+Fixes https://bugzilla.redhat.com/show_bug.cgi?id=1301300
+---
+ src/back-sch-idview.c |  4 ++--
+ src/back-sch.c        | 24 ++++++++++++------------
+ 2 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/src/back-sch-idview.c b/src/back-sch-idview.c
+index 8ffab91..8842906 100644
+--- a/src/back-sch-idview.c
++++ b/src/back-sch-idview.c
+@@ -311,7 +311,7 @@ idview_replace_bval_by_override(const char *bval_usage, const char *attr_name,
+ 	}
+ 
+ 	attr_val = slapi_value_new_berval(bval);
+-	slapi_log_error(SLAPI_LOG_FATAL, cbdata->state->plugin_desc->spd_id,
++	slapi_log_error(SLAPI_LOG_PLUGIN, cbdata->state->plugin_desc->spd_id,
+ 			"Searching for an override of the %s %s with %s=%*s from the overrides\n.",
+ 			bval_usage, attr_name, attr_name, (int) bval->bv_len, bval->bv_val);
+ 
+@@ -347,7 +347,7 @@ idview_replace_bval_by_override(const char *bval_usage, const char *attr_name,
+ 					slapi_ber_bvdone(bval);
+ 					slapi_ber_bvcpy(bval, slapi_value_get_berval(anchor_val));
+ 					anchor_override_found = TRUE;
+-					slapi_log_error(SLAPI_LOG_FATAL, cbdata->state->plugin_desc->spd_id,
++					slapi_log_error(SLAPI_LOG_PLUGIN, cbdata->state->plugin_desc->spd_id,
+ 							"Overriding the %s %s with %s=%*s from the override %s\n.",
+ 							bval_usage, attr_name, IPA_IDVIEWS_ATTR_ANCHORUUID,
+ 							(int) bval->bv_len, bval->bv_val,
+diff --git a/src/back-sch.c b/src/back-sch.c
+index 871734c..9a0e96b 100644
+--- a/src/back-sch.c
++++ b/src/back-sch.c
+@@ -465,13 +465,13 @@ backend_set_process_external_members(Slapi_PBlock *pb,
+ 		 * but as dirsrv was restarted, SSSD might still consider its domain offline. */
+ 		is_group_exists = backend_retrieve_from_nsswitch(&staged, &cbdata);
+ 		if (!is_group_exists) {
+-			slapi_log_error(SLAPI_LOG_PLUGIN, plugin_id,
+-					"group \"%s\" does not exist because SSSD is offline.",
++			slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
++					"group \"%s\" does not exist because SSSD is offline.\n",
+ 					staged.name);
+ 			if (state->ready_to_serve == 0) {
+ 				/* Only wait for SSSD when we populate the original set */
+-				slapi_log_error(SLAPI_LOG_PLUGIN, plugin_id,
+-						"waiting for SSSD to become online...");
++				slapi_log_error(SLAPI_LOG_FATAL, plugin_id,
++						"waiting for SSSD to become online...\n");
+ 				DS_Sleep(PR_SecondsToInterval(35));
+ 			} else {
+ 				break;
+@@ -1609,15 +1609,15 @@ backend_search_cb(Slapi_PBlock *pb)
+ {
+ 	struct backend_search_cbdata cbdata;
+ 	struct backend_staged_search *staged, *next;
+-	int i, isroot;
++	int i, isroot, ret;
+ 
+ 	if (wrap_get_call_level() > 0) {
+ 		return 0;
+ 	}
+ 	memset(&cbdata, 0, sizeof(cbdata));
+ 	cbdata.pb = pb;
+-	slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &cbdata.state);
+-	if (cbdata.state->plugin_base == NULL) {
++	ret = slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &cbdata.state);
++	if ((ret == -1) || (cbdata.state->plugin_base == NULL)) {
+ 		/* The plugin was not actually started. */
+ 		return 0;
+ 	}
+@@ -1626,9 +1626,9 @@ backend_search_cb(Slapi_PBlock *pb)
+ 		return 0;
+ 	}
+ 
+-	slapi_pblock_get(pb, SLAPI_REQUESTOR_ISROOT, &isroot);
++	ret = slapi_pblock_get(pb, SLAPI_REQUESTOR_ISROOT, &isroot);
+ 
+-	if (slapi_op_internal(pb) || (slapi_is_ldapi_conn(pb) && isroot)) {
++	if ((ret == -1) || (slapi_op_internal(pb) || (slapi_is_ldapi_conn(pb) && isroot))) {
+ 		/* The plugin should not engage in internal searches of other
+ 		 * plugins or ldapi+cn=DM */
+ 		return 0;
+@@ -1959,10 +1959,10 @@ backend_locate(Slapi_PBlock *pb, struct backend_entry_data **data, const char **
+ 					if (res == 1) {
+ 						slapi_rdn_remove_index(rdn, 1);
+ 						slapi_rdn_add(rdn, "uid", bval.bv_val);
+-						slapi_sdn_free(&cbdata.target_dn);
+-						cbdata.target_dn = slapi_sdn_set_rdn(scbdata.target_dn, rdn);
+-						map_data_foreach_map(cbdata.state, NULL, backend_locate_cb, &cbdata);
+ 					}
++					slapi_sdn_free(&cbdata.target_dn);
++					cbdata.target_dn = slapi_sdn_set_rdn(scbdata.target_dn, rdn);
++					map_data_foreach_map(cbdata.state, NULL, backend_locate_cb, &cbdata);
+ 					slapi_ber_bvdone(&bval);
+ 					slapi_rdn_free(&rdn);
+ 					idview_free_overrides(&scbdata);
+-- 
+2.5.0
+

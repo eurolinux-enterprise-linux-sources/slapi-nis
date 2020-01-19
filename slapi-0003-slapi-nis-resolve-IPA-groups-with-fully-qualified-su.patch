@@ -1,8 +1,7 @@
-From 0a5e61c042679679646f6f8f673028f8fbcf3ea7 Mon Sep 17 00:00:00 2001
+From d263ce2f95fcf6ec8afa5c9528182cce00f57da6 Mon Sep 17 00:00:00 2001
 From: Alexander Bokovoy <abokovoy@redhat.com>
 Date: Wed, 15 Jun 2016 12:15:46 +0300
-Subject: [PATCH 03/17] slapi-nis: resolve IPA groups with fully qualified
- suffix
+Subject: [PATCH 3/4] slapi-nis: resolve IPA groups with fully qualified suffix
 
 With SSSD 1.14+ there is a logic change to handling of a default domain
 suffix.
@@ -91,7 +90,7 @@ index bb2aa74..cdd2b3c 100644
 +						if (ret.associated_domain != NULL)
 +							break;
 +					}
-+					slapi_ch_free((void**)entries);
++					slapi_ch_free((void**)&entries);
 +				}
 +			}
 +			slapi_pblock_destroy(pb);
@@ -137,5 +136,5 @@ index 72ba641..c15d1ed 100644
  
  struct backend_entry_data {
 -- 
-2.13.6
+2.7.4
 
